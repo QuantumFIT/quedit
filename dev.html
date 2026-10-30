@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Replaced by tools/build.mjs with the tag being built; see docs/VERSIONS.md. -->
+<meta name="quedit-version" content="dev">
+<title>quedit — quantum circuit editor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M0%204H16M0%2012H16%22%20stroke%3D%22%2314202a%22%20stroke-width%3D%221.2%22%2F%3E%3Crect%20x%3D%221.5%22%20y%3D%221%22%20width%3D%226%22%20height%3D%226%22%20fill%3D%22%23fff%22%20stroke%3D%22%2314202a%22%20stroke-width%3D%221.2%22%2F%3E%3Cpath%20d%3D%22M12%204V12%22%20stroke%3D%22%23a8175f%22%20stroke-width%3D%221.2%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%224%22%20r%3D%221.8%22%20fill%3D%22%23a8175f%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%20fill%3D%22%23fff%22%20stroke%3D%22%23a8175f%22%20stroke-width%3D%221.2%22%2F%3E%3Cpath%20d%3D%22M9%2012H15%22%20stroke%3D%22%23a8175f%22%20stroke-width%3D%221.2%22%2F%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="src/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <span class="wordmark">qu<span>edit</span></span>
+    <a id="version" class="version"></a>
+    <span class="tagline">draw a quantum circuit, get quantikz and OpenQASM</span>
+    <span class="spacer"></span>
+    <a class="ghlink" href="https://github.com/QuantumFIT/quedit" title="source on GitHub">source</a>
+    <button id="theme" type="button" title="switch light / dark theme">◐</button>
+  </header>
+
+  <nav class="toolbar" aria-label="circuit">
+    <div class="group">
+      <button id="undo" type="button" title="undo (Ctrl+Z)">↶ undo</button>
+      <button id="redo" type="button" title="redo (Ctrl+Shift+Z)">↷ redo</button>
+    </div>
+    <div class="group stepper" title="number of qubits">
+      <span class="lbl">qubits</span>
+      <button id="qminus" type="button" title="remove the last qubit">−</button>
+      <output id="qcount">0</output>
+      <button id="qplus" type="button" title="add a qubit">+</button>
+    </div>
+    <div class="group stepper" title="number of classical bits">
+      <span class="lbl">bits</span>
+      <button id="cminus" type="button" title="remove the last classical bit">−</button>
+      <output id="ccount">0</output>
+      <button id="cplus" type="button" title="add a classical bit">+</button>
+    </div>
+    <div class="group">
+      <button id="compact" type="button" title="move every gate as far left as it can go">compact</button>
+      <button id="clear" type="button" title="remove all gates">clear</button>
+    </div>
+    <div class="group">
+      <select id="example" title="load an example circuit">
+        <option value="">examples…</option>
+      </select>
+    </div>
+    <span class="spacer"></span>
+    <div class="group">
+      <button id="copyLink" type="button" class="primary" title="copy a link to this circuit">copy link</button>
+    </div>
+  </nav>
+
+  <main class="workspace">
+    <aside class="palette" id="palette" aria-label="gates">
+      <p class="hint">Drag onto a wire, or click to pick and click to place. Shift-click places repeatedly.</p>
+    </aside>
+
+    <section class="plate" id="plate">
+      <svg id="canvas" class="canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="circuit"></svg>
+    </section>
+
+    <aside class="props" id="props" aria-label="selected operation">
+      <div id="propsEmpty" class="empty">
+        <h2>Nothing selected</h2>
+        <p>Click a gate to edit its parameters, qubits, controls or condition.</p>
+        <dl class="keys">
+          <dt>drag</dt><dd>move a gate; drag a control dot to retarget it</dd>
+          <dt>drag off</dt><dd>delete a gate or a control</dd>
+          <dt>right-click</dt><dd>delete</dd>
+          <dt>arrows</dt><dd>move the selected gate</dd>
+          <dt>Del</dt><dd>delete the selected gate</dd>
+          <dt>Esc</dt><dd>drop the picked tool</dd>
+        </dl>
+      </div>
+      <form id="propsForm" hidden autocomplete="off"></form>
+    </aside>
+  </main>
+
+  <section class="output" aria-label="output">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="quantikz" aria-selected="true">quantikz</button>
+      <button type="button" role="tab" data-tab="qasm3">OpenQASM 3</button>
+      <button type="button" role="tab" data-tab="qasm2">OpenQASM 2</button>
+      <span class="spacer"></span>
+      <div class="opts" id="tikzOpts">
+        <label>wire labels
+          <select id="optLabels">
+            <option value="name">q₀, q₁, …</option>
+            <option value="ket0">|0⟩</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+        <label>measurement
+          <select id="optClassical">
+            <option value="none">meter only</option>
+            <option value="after">classical wire after</option>
+            <option value="register">wire to register</option>
+          </select>
+        </label>
+        <label class="toggle"><input type="checkbox" id="optStandalone"> full document</label>
+      </div>
+    </div>
+    <textarea id="code" spellcheck="false" aria-label="code"></textarea>
+    <div class="outbar">
+      <span id="status" class="status" role="status"></span>
+      <span class="spacer"></span>
+      <button id="load" type="button" title="parse this OpenQASM into the editor (Ctrl+Enter)" hidden>load into editor</button>
+      <label class="button" id="openFile" title="open an OpenQASM file">open file<input type="file" id="file" accept=".qasm,.inc,.txt,text/plain" hidden></label>
+      <button id="copy" type="button">copy</button>
+      <button id="download" type="button">download</button>
+    </div>
+  </section>
+</div>
+<div id="ghost" class="ghost" hidden></div>
+<div id="toast" class="toast" role="alert" hidden></div>
+<script type="module">
+  import { boot } from './src/ui.js';
+  boot();
+</script>
+</body>
+</html>

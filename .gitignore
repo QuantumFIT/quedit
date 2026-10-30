@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.DS_Store
+/quedit.html
+_site/
+# git worktrees live here; they are checkouts, never content
+.claude/worktrees/
