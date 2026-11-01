@@ -9,7 +9,7 @@
 // link points at the frozen copy of the build that made it, /v/<tag>/ (see
 // docs/VERSIONS.md).
 
-import { allOps, clone, sortCol, fits, compact } from './model.js';
+import { allOps, clone, sortCol, fits, compact, numQubits } from './model.js';
 import { parseQasm, toQasm } from './qasm.js';
 import { DEFAULT_OPTIONS } from './quantikz.js';
 
@@ -76,6 +76,33 @@ export function fragmentToCircuit(fragment) {
     standalone: p.get('s') === '1',
   };
   return { circuit, options };
+}
+
+// ---------------------------------------------------------------- q-vis
+//
+// q-vis (QuantumFIT/q-vis) animates how a decision diagram evolves under a
+// unitary circuit. Its links are #c=<base64url(OpenQASM 2)>&s=<base64url(state)>,
+// and it reads only unitary programs, so measurements, resets and conditioned
+// gates are left out. Its own links come back here as `c` alone: the importer
+// reads OpenQASM 2 as well as 3.
+
+export const QVIS_URL = 'https://quantum.fit.vut.cz/q-vis/';
+
+// Returns { fragment, dropped: number of operations left out, warnings }.
+export function qvisFragment(c) {
+  const u = clone(c);
+  let dropped = 0;
+  u.cols = u.cols.map((col) => col.filter((o) => {
+    const keep = o.gate !== 'measure' && o.gate !== 'reset' && !o.cond;
+    if (!keep) dropped++;
+    return keep;
+  }));
+  u.cregs = [];
+  const { text, warnings } = toQasm(u, 2);
+  const p = new URLSearchParams();
+  p.set('c', encodeText(text));
+  p.set('s', encodeText(`|${'0'.repeat(numQubits(u))}> : 1`));
+  return { fragment: p.toString(), dropped, warnings };
 }
 
 /** A released version is archived under /v/<version>/ and never changes again. */

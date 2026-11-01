@@ -8,7 +8,7 @@ import {
 import { Editor, labelParts } from './editor.js';
 import { parseQasm, toQasm } from './qasm.js';
 import { toQuantikz } from './quantikz.js';
-import { circuitToFragment, fragmentToCircuit, archiveUrl, liveUrl } from './links.js';
+import { circuitToFragment, fragmentToCircuit, archiveUrl, liveUrl, qvisFragment, QVIS_URL } from './links.js';
 import { EXAMPLES } from './examples.js';
 
 const $ = (id) => document.getElementById(id);
@@ -336,6 +336,7 @@ function renderOutput() {
   $('tikzOpts').hidden = isQasm;
   $('load').hidden = !isQasm;
   $('openFile').hidden = !isQasm;
+  $('pdf').hidden = isQasm;
   code.readOnly = !isQasm;
   let text, warnings = [];
   if (state.tab === 'quantikz') text = toQuantikz(state.circuit, state.options);
@@ -376,14 +377,79 @@ function setTab(tab) {
   renderOutput();
 }
 
-function download() {
-  const ext = state.tab === 'quantikz' ? 'tex' : 'qasm';
-  const blob = new Blob([$('code').value], { type: 'text/plain' });
+function save(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `circuit.${ext}`;
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function download() {
+  const ext = state.tab === 'quantikz' ? 'tex' : 'qasm';
+  save(new Blob([$('code').value], { type: 'text/plain' }), `circuit.${ext}`);
+}
+
+// A browser cannot run LaTeX, so the PDF is compiled by texlive.net (latexcgi,
+// the service behind learnlatex.org), posted from a form so that no CORS is
+// involved; the PDF opens in a new tab.
+const LATEXCGI = 'https://texlive.net/cgi-bin/latexcgi';
+
+function compilePdf() {
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = LATEXCGI;
+  form.enctype = 'multipart/form-data';
+  form.target = '_blank';
+  form.hidden = true;
+  const fields = [
+    ['filename[]', 'document.tex'],
+    ['filecontents[]', toQuantikz(state.circuit, { ...state.options, standalone: true })],
+    ['engine', 'pdflatex'],
+    ['return', 'pdf'],
+  ];
+  for (const [name, value] of fields) {
+    const t = document.createElement('textarea');
+    t.name = name;
+    t.value = value;
+    form.append(t);
+  }
+  document.body.append(form);
+  form.submit();
+  form.remove();
+}
+
+// The drawing, rasterised at 3× for sharp pasting into slides and documents.
+async function pngBlob() {
+  const { svg, width, height } = editor.exportSvg();
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  await img.decode();
+  const scale = 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(width * scale);
+  canvas.height = Math.ceil(height * scale);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no PNG'))), 'image/png'));
+}
+
+async function copyPng() {
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('no image clipboard');
+    // the promise, not the blob: Safari wants the write started inside the click
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]);
+    toast('Copied the drawing as PNG.');
+  } catch {
+    // no image clipboard here (e.g. a page opened from a file): save it instead
+    save(await pngBlob(), 'circuit.png');
+    toast('The clipboard does not take images here; saved circuit.png instead.');
+  }
+}
+
+function openInQvis() {
+  const { fragment, dropped } = qvisFragment(state.circuit);
+  window.open(`${QVIS_URL}#${fragment}`, '_blank', 'noopener');
+  if (dropped) toast(`q-vis shows unitary evolution only: left out ${dropped} measurement${dropped > 1 ? 's, resets or conditioned gates' : ', reset or conditioned gate'}.`);
 }
 
 async function copyText(text, what) {
@@ -513,6 +579,8 @@ export function boot() {
     history.replaceState(null, '', location.href.split('#')[0] + link.slice(link.indexOf('#')));
     copyText(link, 'a link to this circuit');
   });
+  $('copyPng').addEventListener('click', copyPng);
+  $('toQvis').addEventListener('click', openInQvis);
   $('theme').addEventListener('click', () => {
     const dark = document.documentElement.dataset.theme
       ? document.documentElement.dataset.theme === 'dark'
@@ -551,6 +619,7 @@ export function boot() {
   });
   $('copy').addEventListener('click', () => copyText($('code').value, state.tab === 'quantikz' ? 'the quantikz code' : 'the OpenQASM code'));
   $('download').addEventListener('click', download);
+  $('pdf').addEventListener('click', compilePdf);
 
   // keyboard
   document.addEventListener('keydown', (e) => {

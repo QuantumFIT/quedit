@@ -25,6 +25,17 @@ works offline from `file://`.
 - **Output**: the bottom pane shows quantikz, OpenQASM 3 and OpenQASM 2, live.
   The OpenQASM tabs are editable: change the code, or open a `.qasm` file, and press
   *load into editor* (Ctrl+Enter). Parse errors point at their line.
+- **PDF** (quantikz tab) compiles the quantikz as a standalone document on
+  [texlive.net](https://texlive.net/) and opens the PDF in a new tab — the browser cannot
+  run LaTeX itself, so the code is sent there.
+- **copy PNG** puts the drawing on the clipboard as an image (3× resolution, white
+  background); where the browser does not allow images on the clipboard, e.g. from
+  `file://`, it saves `circuit.png` instead.
+- **open in q-vis** shows the circuit in [q-vis](https://quantum.fit.vut.cz/q-vis/), which
+  animates its decision diagram gate by gate. q-vis simulates unitary circuits only, so
+  measurements, resets and conditioned gates are left out, and it takes only angles that
+  are π times a dyadic fraction (π/4 yes, π/3 no). Its *quedit ↗* button brings a circuit
+  back.
 - **copy link** gives a permalink with the circuit, its layout and the export options in
   it. See below for why links point at a versioned copy.
 

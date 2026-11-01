@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { archiveUrl, liveUrl, circuitToFragment, fragmentToCircuit } from '../src/links.js';
+import { archiveUrl, liveUrl, circuitToFragment, fragmentToCircuit, qvisFragment, decodeText } from '../src/links.js';
 import { parseQasm } from '../src/qasm.js';
 import { allOps } from '../src/model.js';
 import { buildHtml } from '../tools/build.mjs';
@@ -60,4 +60,28 @@ test('the built page is self-contained', () => {
   const { html } = buildHtml();
   assert.doesNotMatch(html, /src="src\/|href="src\//);
   assert.match(html, /__m\['ui\.js'\]\.boot\(\)/);
+});
+
+test('a circuit goes to q-vis as unitary OpenQASM 2 from |0…0⟩', () => {
+  const { circuit } = parseQasm(`OPENQASM 3.0;
+include "stdgates.inc";
+qubit[2] q;
+bit[2] c;
+h q[0];
+ryy(pi/2) q[0], q[1];
+c[0] = measure q[0];
+if (c[0]) x q[1];
+reset q[0];
+`);
+  const { fragment, dropped } = qvisFragment(circuit);
+  assert.equal(dropped, 3);
+  const p = new URLSearchParams(fragment);
+  const qasm = decodeText(p.get('c'));
+  assert.match(qasm, /^OPENQASM 2\.0;/);
+  assert.match(qasm, /ryy\(pi\/2\) q\[0\], ?q\[1\];/);
+  assert.doesNotMatch(qasm, /measure|reset|if|creg/);
+  assert.equal(decodeText(p.get('s')), '|00> : 1');
+  // and what q-vis sends back — its OpenQASM 2, as `c` alone — loads here
+  const back = fragmentToCircuit(`c=${p.get('c')}`).circuit;
+  assert.equal(allOps(back).length, 2);
 });

@@ -48,6 +48,8 @@
     </div>
     <span class="spacer"></span>
     <div class="group">
+      <button id="copyPng" type="button" title="copy the drawing to the clipboard as a PNG image">copy PNG</button>
+      <button id="toQvis" type="button" title="open this circuit in q-vis, which animates its decision diagram gate by gate">open in q-vis</button>
       <button id="copyLink" type="button" class="primary" title="copy a link to this circuit">copy link</button>
     </div>
   </nav>
@@ -110,6 +112,7 @@
       <label class="button" id="openFile" title="open an OpenQASM file">open file<input type="file" id="file" accept=".qasm,.inc,.txt,text/plain" hidden></label>
       <button id="copy" type="button">copy</button>
       <button id="download" type="button">download</button>
+      <button id="pdf" type="button" title="compile this quantikz as a standalone document on texlive.net (the code is sent there) and open the PDF">PDF</button>
     </div>
   </section>
 </div>

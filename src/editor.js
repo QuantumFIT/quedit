@@ -17,6 +17,19 @@ const MINW = 52;         // minimal column width
 const BOX = 34;          // gate box height
 const EXTRA_COLS = 3;    // empty columns drawn after the circuit
 
+const SERIF = `'Latin Modern Roman', 'CMU Serif', 'Palatino Linotype', Palatino, Georgia, serif`;
+const MONO = 'ui-monospace, Menlo, Consolas, monospace';
+const EXPORT_CSS = `
+.wire, .link { stroke: #000; stroke-width: 1.3; }
+.box, .nctrl, .oplus { fill: #fff; stroke: #000; stroke-width: 1.4; }
+.ctrl { fill: #000; }
+.oplusx, .swapx, .meter { stroke: #000; stroke-width: 1.4; fill: none; }
+.barrier { stroke: #666; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.glabel { font: 17px ${SERIF}; fill: #000; }
+.glabel .sub { font-size: 12px; } .glabel .rest { font-size: 13px; }
+.qlabel { font: 16px ${SERIF}; fill: #000; } .qlabel .idx { font-size: 11px; }
+.cbit, .tidx, .cond { font: 10px ${MONO}; fill: #555; }`.replace(/\n/g, ' ');
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export const prettyExpr = (e) => e.replace(/\bpi\b/g, 'π').replace(/\btheta\b/g, 'θ').replace(/\bphi\b/g, 'φ')
@@ -169,9 +182,10 @@ export class Editor {
 
   // ---- geometry
 
-  layout(c) {
+  // `spare`: whether to add the empty columns the editor offers for dropping into
+  layout(c, spare = true) {
     const n = numQubits(c);
-    const ncols = Math.max(c.cols.length + EXTRA_COLS, 8);
+    const ncols = spare ? Math.max(c.cols.length + EXTRA_COLS, 8) : Math.max(c.cols.length, 1);
     const widths = [];
     for (let i = 0; i < ncols; i++) {
       const col = c.cols[i] || [];
@@ -250,6 +264,26 @@ export class Editor {
     this.svg.setAttribute('viewBox', `0 0 ${g.width} ${g.height}`);
     this.svg.classList.toggle('armed', !!this.tool);
     this.svg.innerHTML = parts.join('');
+  }
+
+  // The circuit alone, as a standalone SVG document: no column guides, hover,
+  // selection or delete buttons, and its own stylesheet in fixed light colours,
+  // so it looks the same pasted anywhere. Returns { svg, width, height }.
+  exportSvg() {
+    const c = this.host.circuit();
+    const g = this.layout(c, false);
+    const parts = [];
+    for (let q = 0; q < g.n; q++) {
+      const l = locate(c.qregs, q);
+      const y = g.y(q);
+      parts.push(`<line class="wire" x1="${LEFT - 8}" y1="${y}" x2="${g.width - 10}" y2="${y}"/>`);
+      parts.push(`<text class="qlabel" x="${LEFT - 16}" y="${y + 5}" text-anchor="end">${esc(l.reg.name)}<tspan class="idx" dy="4">${l.idx}</tspan></text>`);
+    }
+    c.cols.forEach((col, ci) => { for (const op of col) parts.push(this.renderOp(op, ci, g, false, '')); });
+    const body = parts.join('').replace(/<rect class="hit"[^>]*\/>/g, '').replace(/ data-[a-z]+="[^"]*"/g, '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${g.width}" height="${g.height}" viewBox="0 0 ${g.width} ${g.height}">` +
+      `<style>${EXPORT_CSS}</style><rect width="100%" height="100%" fill="#fff"/>${body}</svg>`;
+    return { svg, width: g.width, height: g.height };
   }
 
   renderOp(op, ci, g, selected, extra) {
