@@ -8,6 +8,7 @@ import { parseQasm } from '../src/qasm.js';
 import { toQuantikz, exprToTex } from '../src/quantikz.js';
 import { EXAMPLES } from '../src/examples.js';
 import { setHidden, numQubits } from '../src/model.js';
+import { fragmentToCircuit, encodeText } from '../src/links.js';
 
 const BELL = 'OPENQASM 2.0; qreg q[2]; creg c[2]; h q[0]; cx q[0], q[1]; measure q -> c;';
 
@@ -81,17 +82,30 @@ test('the output compiles with pdflatex', { skip: !pdflatex && 'no pdflatex with
   }
 });
 
-test('hidden qubits are one row of dots, which lines still reach into', () => {
-  const { circuit } = parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[5] q; h q[0]; cx q[0], q[2]; ' +
-    'cx q[1], q[4]; h q[2]; cz q[3], q[4]; swap q[0], q[3];');
+test('hidden qubits: one row of dots, stubs toward it, and no empty columns', () => {
+  // two swaps in one column, each with an end under the dots: they must not join up
+  // into what looks like one swap, and the column of a wholly hidden swap goes
+  const src = 'OPENQASM 3.0; include "stdgates.inc"; qubit[5] q; h q[0]; h q[1]; x q[2]; x q[3]; x q[4]; ' +
+    'swap q[2], q[3]; swap q[0], q[1]; swap q[3], q[4];';
+  const { circuit } = fragmentToCircuit(`c=${encodeText(src)}&k=0.0.0.0.0.2.1.2`);
   setHidden(circuit, [1, 2, 3], true);
-  const rows = toQuantikz(circuit).split('\n').filter((l) => l.includes('&')).map((l) => l.replace(/\\\\$/, '').split('&').map((s) => s.trim()));
+  const rows = toQuantikz(circuit).split('\n').filter((l) => l.includes('&'))
+    .map((l) => l.replace(/\\\\$/, '').split('&').map((s) => s.trim()));
   assert.equal(rows.length, 3, 'q0, the dots, q4');
   assert.match(rows[1][0], /\\lstick\{\\vdots\} \\setwiretype\{n\}/);
   assert.ok(rows[1].slice(1).every((s) => s === ''), 'nothing is drawn on the dots');
-  const col = (ci) => rows.map((r) => r[ci + 1]);
-  assert.deepEqual(col(0), ['\\gate{H}', '', '\\qw'], 'h q[0]');
-  assert.deepEqual(col(1), ['\\ctrl{1}', '', '\\qw'], 'a cx into the dots');
-  assert.deepEqual(col(2), ['\\qw', '', '\\targ{} \\vqw{-1}'], 'a cx out of them');
-  assert.deepEqual(col(4), ['\\targX{} \\vqw{1}', '', '\\qw'], 'a swap with a hidden end');
+  assert.equal(rows[0].length, 4, 'label, the gates, the swaps, the end: the hidden swap left no column');
+  assert.deepEqual(rows.map((r) => r[2]), [
+    '\\targX{} \\wire[d][1][dash pattern=on 3.5mm off 50cm]{q}', '',
+    '\\targX{} \\wire[u][1][dash pattern=on 3.5mm off 50cm]{q}']);
+  // a control into the dots from a box stubs from the box, longer, to clear it
+  const b = parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[3] q; cx q[2], q[0];').circuit;
+  setHidden(b, [2], true);
+  // two rows away: the line crosses q1 in full, and the stub starts from q1's wire
+  const bt = toQuantikz(b);
+  assert.match(bt, /\\targ\{\} \\wire\[d\]\[1\]\{q\}/);
+  assert.match(bt, /q_\{1\}\$\}\s*& \\wire\[d\]\[1\]\[dash pattern=on 3\.5mm/);
+  const g = parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[3] q; ch q[2], q[0];').circuit;
+  setHidden(g, [1, 2], true);
+  assert.match(toQuantikz(g), /\\gate\{H\} \\wire\[d\]\[1\]\[dash pattern=on 5\.5mm/);
 });

@@ -192,6 +192,8 @@ export class Editor {
     const widths = [];
     for (let i = 0; i < ncols; i++) {
       const col = c.cols[i] || [];
+      // a column whose operations are all hidden closes up, as in the quantikz
+      if (col.length && !col.some((o) => opVisible(c, o))) { widths.push(0); continue; }
       widths.push(Math.max(MINW, ...col.map((o) => opWidth(o) + 18)));
     }
     const lefts = [];
@@ -246,8 +248,8 @@ export class Editor {
     const parts = [];
     const n = g.n;
     // column guides
-    for (let i = 0; i < g.ncols; i++) {
-      if (i % 2 === 0) parts.push(`<rect class="colband" x="${g.lefts[i]}" y="${g.top - ROW / 2}" width="${g.widths[i]}" height="${Math.max(g.rows.length, 1) * ROW}"/>`);
+    for (let i = 0, k = 0; i < g.ncols; i++) {
+      if (g.widths[i] && k++ % 2 === 0) parts.push(`<rect class="colband" x="${g.lefts[i]}" y="${g.top - ROW / 2}" width="${g.widths[i]}" height="${Math.max(g.rows.length, 1) * ROW}"/>`);
     }
     if (this.hover && !this.drag && this.tool && this.hover.q < n) {
       const h = this.hover;
@@ -316,7 +318,10 @@ export class Editor {
     const out = [];
     const [lo, hi] = opSpan(op);
     const w = opWidth(op);
-    let bbox = [x - w / 2, y(lo) - BOX / 2, w, y(hi) - y(lo) + BOX];
+    // what is drawn spans the visible parts only; see `stubs` below for the rest
+    const vis = opQubits(op).filter(shown);
+    const [ytop, ybot] = [Math.min(...vis.map(y)), Math.max(...vis.map(y))];
+    let bbox = [x - w / 2, ytop - BOX / 2, w, ybot - ytop + BOX];
 
     if (op.gate === 'barrier') {
       const y0 = y(lo) - ROW / 2 + 6, y1 = y(hi) + ROW / 2 - 6;
@@ -324,7 +329,23 @@ export class Editor {
       out.push(`<line class="barrier" x1="${x}" y1="${y0}" x2="${x}" y2="${y1}"/>`);
       bbox = [x - 8, y0, 16, y1 - y0];
     } else {
-      if (hi > lo) out.push(`<line class="link" x1="${x}" y1="${y(lo)}" x2="${x}" y2="${y(hi)}"/>`);
+      if (ybot > ytop) out.push(`<line class="link" x1="${x}" y1="${ytop}" x2="${x}" y2="${ybot}"/>`);
+      // A part on a hidden qubit beyond the visible ones: a short stub toward its
+      // dots, stopping well short of them, so that two operations reaching into the
+      // same dots from above and below do not look like one.
+      const ty = op.targets.filter(shown).map(y);
+      const symbol = op.gate === 'swap' || (op.controls.length && ['x', 'z'].includes(op.gate) && op.targets.length === 1);
+      const boxAt = (yy) => !symbol && ty.length > 0 && yy >= Math.min(...ty) && yy <= Math.max(...ty);
+      for (const yy of new Set(opQubits(op).filter((q) => !shown(q)).map(y))) {
+        const from = yy < ytop ? ytop : yy > ybot ? ybot : null;
+        if (from == null) continue;
+        // past wires in between, the line runs in full up to the wire next to the dots
+        const dir = Math.sign(yy - from);
+        const near = yy - dir * ROW;
+        if (near !== from) out.push(`<line class="link" x1="${x}" y1="${from}" x2="${x}" y2="${near}"/>`);
+        const len = (near === from && boxAt(from) ? BOX / 2 : 7) + 11;
+        out.push(`<line class="link" x1="${x}" y1="${near}" x2="${x}" y2="${near + dir * len}"/>`);
+      }
       // body hit area spanning the whole operation
       out.push(`<rect class="hit" data-part="b" data-q="${op.targets[0]}" x="${bbox[0]}" y="${bbox[1]}" width="${bbox[2]}" height="${bbox[3]}"/>`);
       if (op.gate === 'swap') {
@@ -355,7 +376,7 @@ export class Editor {
         out.push(`<g data-part="b" data-q="${t}" class="part"><rect class="box" x="${x - w / 2}" y="${y(t) - BOX / 2}" width="${w}" height="${BOX}"/>` +
           `<text class="glabel" x="${x}" y="${y(t) + 6}" text-anchor="middle">|0⟩</text></g>`);
       } else {
-        const tlo = Math.min(...op.targets), thi = Math.max(...op.targets);
+        const tlo = Math.min(...op.targets.filter(shown)), thi = Math.max(...op.targets.filter(shown));
         const [m, s, r] = labelParts(op);
         const yc = (y(tlo) + y(thi)) / 2;
         out.push(`<g data-part="b" data-q="${op.targets[0]}" class="part"><rect class="box" x="${x - w / 2}" y="${y(tlo) - BOX / 2}" width="${w}" height="${y(thi) - y(tlo) + BOX}"/>` +

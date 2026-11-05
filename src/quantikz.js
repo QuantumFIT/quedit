@@ -1,6 +1,6 @@
 // Export to LaTeX quantikz.
 
-import { GATES, numQubits, numCbits, locate, sortCol, opSpan, isBox, isHidden, displayRows, opVisible } from './model.js';
+import { GATES, numQubits, numCbits, locate, sortCol, opSpan, opQubits, isBox, isHidden, displayRows, opVisible } from './model.js';
 
 const GREEK = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'theta', 'lambda', 'phi', 'pi', 'psi', 'omega', 'sigma', 'tau', 'mu', 'nu'];
 const UNI = { 'π': '\\pi', 'θ': '\\theta', 'φ': '\\phi', 'λ': '\\lambda', 'γ': '\\gamma', 'α': '\\alpha', 'β': '\\beta', 'τ': '\\tau' };
@@ -21,6 +21,13 @@ export function gateTex(op) {
   if (op.pow != null) base = `(${base})^{${exprToTex(String(op.pow))}}`;
   if (op.params.length) base += `(${op.params.map(exprToTex).join(', ')})`;
   return base;
+}
+
+// The single-wire symbol of a target, without the line to its controls.
+function targetTex(op) {
+  if (op.controls.length && op.gate === 'x') return '\\targ{}';
+  if (op.controls.length && op.gate === 'z') return '\\control{}';
+  return `\\gate{${gateTex(op)}}`;
 }
 
 export const DEFAULT_OPTIONS = {
@@ -58,12 +65,10 @@ export function toQuantikz(c, options = {}) {
   c.cols.forEach((col, ci) => {
     for (const op of sortCol(col)) {
       if (!opVisible(c, op)) continue;
-      // Everything below is in rows. A part on a hidden qubit is not drawn, but the
-      // lines of the operation still reach into its row of dots.
       const row = (q) => rowOf[q];
       const hid = (q) => isHidden(c, q);
       const cell = (r, s) => { grid[r][ci] = grid[r][ci] ? grid[r][ci] + ' ' + s : s; };
-      const set = (q, s) => { if (!hid(q)) cell(row(q), s); };
+      const set = (q, s) => cell(row(q), s);
       if (op.cond) notes.push(`condition "${op.cond}" on ${op.gate} (column ${ci + 1}) not drawn`);
       const t0 = op.targets[0];
       if (op.gate === 'measure') {
@@ -73,48 +78,81 @@ export function toQuantikz(c, options = {}) {
       }
       if (op.gate === 'reset') { set(t0, '\\gate{\\ket{0}}'); continue; }
       if (op.gate === 'barrier') {
-        cell(row(Math.min(...op.targets.filter((q) => !hid(q)))), '\\slice[style={black!60,dashed}]{}');
+        set(Math.min(...op.targets.filter((q) => !hid(q))), '\\slice[style={black!60,dashed}]{}');
         continue;
       }
-      // `anchors`: the rows of the target, which controls point at
+      if (opQubits(op).some(hid)) { partial(op, row, hid, cell, set); continue; }
+      // target rows that controls connect to
       let anchors;
-      const targetsShown = op.targets.filter((q) => !hid(q));
-      if (!targetsShown.length) {
-        anchors = [...new Set(op.targets.map(row))];
-      } else if (op.gate === 'swap') {
-        const [a, b] = [...op.targets].sort((x, y) => x - y);
-        if (hid(b)) { set(a, '\\targX{}'); cell(row(a), `\\vqw{${row(b) - row(a)}}`); }
-        else if (hid(a)) { set(b, '\\targX{}'); cell(row(b), `\\vqw{${row(a) - row(b)}}`); }
-        else { set(a, `\\swap{${row(b) - row(a)}}`); set(b, '\\targX{}'); }
-        anchors = [row(a), row(b)];
+      if (op.gate === 'swap') {
+        const [a, b] = op.targets.map(row).sort((x, y) => x - y);
+        cell(a, `\\swap{${b - a}}`);
+        cell(b, '\\targX{}');
+        anchors = [a, b];
       } else if (isBox(op)) {
         const [lo, hi] = [row(Math.min(...op.targets)), row(Math.max(...op.targets))];
         cell(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
         for (let r = lo + 1; r <= hi; r++) if (shown[r].q != null) cell(r, '\\qw');
         anchors = [lo, hi];
-      } else if (op.controls.length && op.gate === 'x') {
-        set(t0, '\\targ{}'); anchors = [row(t0)];
-      } else if (op.controls.length && op.gate === 'z') {
-        set(t0, '\\control{}'); anchors = [row(t0)];
       } else {
-        set(t0, `\\gate{${gateTex(op)}}`); anchors = [row(t0)];
+        set(t0, targetTex(op)); anchors = [row(t0)];
       }
-      const nearest = (r) => anchors.reduce((best, a) => (Math.abs(a - r) < Math.abs(best - r) ? a : best));
       for (const k of op.controls) {
-        if (!hid(k.q)) { set(k.q, `\\${k.neg ? 'octrl' : 'ctrl'}{${nearest(row(k.q)) - row(k.q)}}`); continue; }
-        // a hidden control: a line from the target into its row of dots
-        const a = nearest(row(k.q));
-        if (a !== row(k.q) && shown[a].q != null) cell(a, `\\vqw{${row(k.q) - a}}`);
+        const r = row(k.q);
+        const a = anchors.reduce((best, x) => (Math.abs(x - r) < Math.abs(best - r) ? x : best));
+        cell(r, `\\${k.neg ? 'octrl' : 'ctrl'}{${a - r}}`);
       }
     }
   });
+
+  // An operation only partly on hidden qubits: its visible parts, one line between
+  // them, and a short stub toward each hidden part beyond them. The stub stops short
+  // of the dots, so two operations reaching into the same dots from above and below
+  // never look like one.
+  function partial(op, row, hid, cell, set) {
+    const rs = [];
+    const boxed = new Set();     // rows where the part is a box, which a stub has to clear
+    const targets = op.targets.filter((q) => !hid(q));
+    if (targets.length && isBox(op)) {
+      const [lo, hi] = [row(Math.min(...targets)), row(Math.max(...targets))];
+      cell(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
+      for (let r = lo + 1; r <= hi; r++) if (shown[r].q != null) cell(r, '\\qw');
+      rs.push(lo, hi);
+      boxed.add(lo).add(hi);
+    } else {
+      for (const q of targets) {
+        const tex = op.gate === 'swap' ? '\\targX{}' : targetTex(op);
+        set(q, tex);
+        rs.push(row(q));
+        if (tex.startsWith('\\gate')) boxed.add(row(q));
+      }
+    }
+    for (const k of op.controls) {
+      if (!hid(k.q)) { set(k.q, k.neg ? '\\ocontrol{}' : '\\control{}'); rs.push(row(k.q)); }
+    }
+    const top = Math.min(...rs), bot = Math.max(...rs);
+    if (bot > top) cell(top, `\\wire[d][${bot - top}]{q}`);
+    // A stub has a fixed length from the centre of its part: one dash of a dash
+    // pattern, since how far away the dots are depends on what else is in the rows.
+    const stub = (r) => `dash pattern=on ${boxed.has(r) ? '5.5mm' : '3.5mm'} off 50cm`;
+    // Past wires in between, the line runs in full up to the wire next to the dots.
+    for (const r of new Set(opQubits(op).filter(hid).map(row))) {
+      if (r < top - 1) cell(top, `\\wire[u][${top - r - 1}]{q}`);
+      if (r < top) cell(r + 1, `\\wire[u][1][${stub(r + 1 === top ? top : -1)}]{q}`);
+      if (r > bot + 1) cell(bot, `\\wire[d][${r - bot - 1}]{q}`);
+      if (r > bot) cell(r - 1, `\\wire[d][1][${stub(r - 1 === bot ? bot : -1)}]{q}`);
+    }
+  }
+
+  // Columns left with nothing to draw because all they hold is hidden are dropped.
+  const kept = c.cols.map((col, ci) => ci).filter((ci) => !c.cols[ci].length || c.cols[ci].some((o) => opVisible(c, o)));
 
   const cbits = numCbits(c);
   const lines = [];
   for (let r = 0; r < rows; r++) {
     let label = '';
     if (r < shown.length && shown[r].dots) {
-      lines.push(['\\lstick{\\vdots} \\setwiretype{n}', ...grid[r].map((s) => s || ''), '']);
+      lines.push(['\\lstick{\\vdots} \\setwiretype{n}', ...kept.map((ci) => grid[r][ci] || ''), '']);
       continue;
     }
     const q = r < shown.length ? shown[r].q : -1;
@@ -125,7 +163,7 @@ export function toQuantikz(c, options = {}) {
       label = `\\lstick{$${texEscape(l.reg.name)}_{${l.idx}}$}`;
     } else if (opt.labels === 'ket0') label = '\\lstick{\\ket{0}}';
     const cells = [label];
-    for (let ci = 0; ci <= ncols; ci++) {
+    for (const ci of [...kept, ncols]) {
       const classical = r === regRow || ci > classicalFrom[r];
       let cell = ci < ncols ? grid[r][ci] : null;
       if (!cell) cell = classical ? '\\cw' : '\\qw';

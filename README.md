@@ -22,8 +22,9 @@ works offline from `file://`.
 - **Hide** qubits under ⋮: hover a qubit's label and click the ⋮ button. Neighbouring
   hidden qubits share one row of dots; click the dots to show them again. Only the drawing
   changes (editor, PNG and quantikz, where the row is `\lstick{\vdots} \setwiretype{n}`),
-  never the program: gates entirely on hidden qubits are not drawn, and a gate partly on
-  them keeps its line into the dots.
+  never the program: gates entirely on hidden qubits are not drawn (and a column left
+  empty by that closes up), and a gate partly on them gets a short stub toward the dots,
+  which stops short of them so that two gates never look joined.
 - **Edit** the selected gate in the side panel: parameters (`pi/4`, `theta`, `-2*pi/3`),
   target qubits, controls (`~2` is a negative control on qubit 2), the classical bit of a
   measurement, a classical condition. Arrow keys move the selected gate, `Del` deletes it.

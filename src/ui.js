@@ -585,11 +585,13 @@ export function boot() {
     const dark = document.documentElement.dataset.theme
       ? document.documentElement.dataset.theme === 'dark'
       : matchMedia('(prefers-color-scheme: dark)').matches;
-    const t = dark ? 'light' : 'dark';
-    applyTheme(t);
-    try { localStorage.setItem('quedit:theme', t); } catch { /* ignore */ }
+    applyTheme(dark ? 'light' : 'dark');
   });
-  try { applyTheme(localStorage.getItem('quedit:theme')); } catch { /* ignore */ }
+  // The page starts in the system's theme every time, and follows it when it
+  // changes; the button overrides it for this page only. (Older builds stored the
+  // choice, which then outlived the reason for it: drop it.)
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(null));
+  try { localStorage.removeItem('quedit:theme'); } catch { /* ignore */ }
 
   // side panel
   const form = $('propsForm');
