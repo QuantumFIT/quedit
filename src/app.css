@@ -232,6 +232,12 @@ button.primary { background: var(--ink); color: var(--plate); border-color: var(
 .canvas .qlabel:hover .qdel { opacity: 1; }
 .canvas .qdel:hover circle { stroke: var(--bad); }
 .canvas .qdel:hover path { stroke: var(--bad); }
+.canvas .qdel .dot { stroke-width: 2.6; stroke-linecap: round; }
+.canvas [data-hideq]:hover circle { stroke: var(--accent); }
+.canvas [data-hideq]:hover path { stroke: var(--accent); }
+.canvas .dots text { font: 20px var(--serif); fill: var(--c-ink); }
+.canvas .dots[data-showq] { cursor: pointer; }
+.canvas .dots[data-showq]:hover text { fill: var(--accent); }
 
 /* ---- properties ---------------------------------------------------------- */
 

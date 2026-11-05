@@ -13,6 +13,7 @@ The fragment format, for reference (all but `c` are omitted when they are the de
 | --- | --- |
 | `c` | the circuit as OpenQASM 3, UTF-8, base64url |
 | `k` | the column of each operation, in program order, `.`-separated; only when the layout is not the automatic one |
+| `h` | the qubits hidden under ⋮, `.`-separated (since v3) |
 | `l` | wire labels: `k` = \|0⟩, `x` = none (default: register names) |
 | `m` | measurements: `a` = classical wire after the meter, `r` = wire to a register (default: meter only) |
 | `s` | `1` = emit a complete standalone document |

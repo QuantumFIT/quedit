@@ -85,3 +85,14 @@ reset q[0];
   const back = fragmentToCircuit(`c=${p.get('c')}`).circuit;
   assert.equal(allOps(back).length, 2);
 });
+
+test('hidden qubits survive a link', () => {
+  const { circuit } = parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[4] q; h q[0]; cx q[0], q[3];');
+  circuit.hidden = [1, 2];
+  const frag = circuitToFragment(circuit);
+  assert.match(frag, /(^|&)h=1\.2(&|$)/);
+  assert.deepEqual(fragmentToCircuit(frag).circuit.hidden, [1, 2]);
+  // out of range, or hiding everything, is ignored rather than fatal
+  assert.equal(fragmentToCircuit(frag.replace('h=1.2', 'h=1.9')).circuit.hidden, undefined);
+  assert.equal(fragmentToCircuit(frag.replace('h=1.2', 'h=0.1.2.3')).circuit.hidden, undefined);
+});

@@ -1,6 +1,6 @@
 // Export to LaTeX quantikz.
 
-import { GATES, numQubits, numCbits, locate, sortCol, opSpan, isBox } from './model.js';
+import { GATES, numQubits, numCbits, locate, sortCol, opSpan, isBox, isHidden, displayRows, opVisible } from './model.js';
 
 const GREEK = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'theta', 'lambda', 'phi', 'pi', 'psi', 'omega', 'sigma', 'tau', 'mu', 'nu'];
 const UNI = { 'π': '\\pi', 'θ': '\\theta', 'φ': '\\phi', 'λ': '\\lambda', 'γ': '\\gamma', 'α': '\\alpha', 'β': '\\beta', 'τ': '\\tau' };
@@ -33,20 +33,23 @@ export function toQuantikz(c, options = {}) {
   const opt = { ...DEFAULT_OPTIONS, ...options };
   const n = numQubits(c);
   const ncols = c.cols.length;
-  const hasMeasure = c.cols.some((col) => col.some((o) => o.gate === 'measure'));
-  const regRow = opt.classical === 'register' && hasMeasure ? n : -1;
-  const rows = regRow >= 0 ? n + 1 : n;
+  // rows of the drawing: one per visible qubit, one of dots per run of hidden ones
+  const { rows: shown, rowOf } = displayRows(c);
+  const hasMeasure = c.cols.some((col) => col.some((o) => o.gate === 'measure' && opVisible(c, o)));
+  const regRow = opt.classical === 'register' && hasMeasure ? shown.length : -1;
+  const rows = regRow >= 0 ? shown.length + 1 : shown.length;
   const grid = Array.from({ length: rows }, () => new Array(ncols).fill(null));
   const notes = [];
 
-  // `classicalFrom[q]`: column after which qubit q's wire is classical
-  const classicalFrom = new Array(n).fill(Infinity);
+  // `classicalFrom[r]`: column after which row r's wire is classical
+  const classicalFrom = new Array(rows).fill(Infinity);
   if (opt.classical === 'after') {
     for (let q = 0; q < n; q++) {
+      if (isHidden(c, q)) continue;
       for (let ci = ncols - 1; ci >= 0; ci--) {
         const op = c.cols[ci].find((o) => opSpan(o)[0] <= q && q <= opSpan(o)[1]);
         if (!op) continue;
-        if (op.gate === 'measure' && op.targets[0] === q) classicalFrom[q] = ci;
+        if (op.gate === 'measure' && op.targets[0] === q) classicalFrom[rowOf[q]] = ci;
         break;
       }
     }
@@ -54,41 +57,54 @@ export function toQuantikz(c, options = {}) {
 
   c.cols.forEach((col, ci) => {
     for (const op of sortCol(col)) {
-      const set = (r, s) => { grid[r][ci] = grid[r][ci] ? grid[r][ci] + ' ' + s : s; };
+      if (!opVisible(c, op)) continue;
+      // Everything below is in rows. A part on a hidden qubit is not drawn, but the
+      // lines of the operation still reach into its row of dots.
+      const row = (q) => rowOf[q];
+      const hid = (q) => isHidden(c, q);
+      const cell = (r, s) => { grid[r][ci] = grid[r][ci] ? grid[r][ci] + ' ' + s : s; };
+      const set = (q, s) => { if (!hid(q)) cell(row(q), s); };
       if (op.cond) notes.push(`condition "${op.cond}" on ${op.gate} (column ${ci + 1}) not drawn`);
       const t0 = op.targets[0];
       if (op.gate === 'measure') {
         set(t0, '\\meter{}');
-        if (regRow >= 0) set(t0, `\\vcw{${regRow - t0}}`);
+        if (regRow >= 0) set(t0, `\\vcw{${regRow - row(t0)}}`);
         continue;
       }
       if (op.gate === 'reset') { set(t0, '\\gate{\\ket{0}}'); continue; }
       if (op.gate === 'barrier') {
-        set(Math.min(...op.targets), '\\slice[style={black!60,dashed}]{}');
+        cell(row(Math.min(...op.targets.filter((q) => !hid(q)))), '\\slice[style={black!60,dashed}]{}');
         continue;
       }
-      // target rows that controls connect to
+      // `anchors`: the rows of the target, which controls point at
       let anchors;
-      if (op.gate === 'swap') {
+      const targetsShown = op.targets.filter((q) => !hid(q));
+      if (!targetsShown.length) {
+        anchors = [...new Set(op.targets.map(row))];
+      } else if (op.gate === 'swap') {
         const [a, b] = [...op.targets].sort((x, y) => x - y);
-        set(a, `\\swap{${b - a}}`);
-        set(b, '\\targX{}');
-        anchors = [a, b];
+        if (hid(b)) { set(a, '\\targX{}'); cell(row(a), `\\vqw{${row(b) - row(a)}}`); }
+        else if (hid(a)) { set(b, '\\targX{}'); cell(row(b), `\\vqw{${row(a) - row(b)}}`); }
+        else { set(a, `\\swap{${row(b) - row(a)}}`); set(b, '\\targX{}'); }
+        anchors = [row(a), row(b)];
       } else if (isBox(op)) {
-        const [lo, hi] = [Math.min(...op.targets), Math.max(...op.targets)];
-        set(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
-        for (let r = lo + 1; r <= hi; r++) set(r, '\\qw');
+        const [lo, hi] = [row(Math.min(...op.targets)), row(Math.max(...op.targets))];
+        cell(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
+        for (let r = lo + 1; r <= hi; r++) if (shown[r].q != null) cell(r, '\\qw');
         anchors = [lo, hi];
       } else if (op.controls.length && op.gate === 'x') {
-        set(t0, '\\targ{}'); anchors = [t0];
+        set(t0, '\\targ{}'); anchors = [row(t0)];
       } else if (op.controls.length && op.gate === 'z') {
-        set(t0, '\\control{}'); anchors = [t0];
+        set(t0, '\\control{}'); anchors = [row(t0)];
       } else {
-        set(t0, `\\gate{${gateTex(op)}}`); anchors = [t0];
+        set(t0, `\\gate{${gateTex(op)}}`); anchors = [row(t0)];
       }
+      const nearest = (r) => anchors.reduce((best, a) => (Math.abs(a - r) < Math.abs(best - r) ? a : best));
       for (const k of op.controls) {
-        const a = anchors.reduce((best, r) => (Math.abs(r - k.q) < Math.abs(best - k.q) ? r : best));
-        set(k.q, `\\${k.neg ? 'octrl' : 'ctrl'}{${a - k.q}}`);
+        if (!hid(k.q)) { set(k.q, `\\${k.neg ? 'octrl' : 'ctrl'}{${nearest(row(k.q)) - row(k.q)}}`); continue; }
+        // a hidden control: a line from the target into its row of dots
+        const a = nearest(row(k.q));
+        if (a !== row(k.q) && shown[a].q != null) cell(a, `\\vqw{${row(k.q) - a}}`);
       }
     }
   });
@@ -97,10 +113,15 @@ export function toQuantikz(c, options = {}) {
   const lines = [];
   for (let r = 0; r < rows; r++) {
     let label = '';
+    if (r < shown.length && shown[r].dots) {
+      lines.push(['\\lstick{\\vdots} \\setwiretype{n}', ...grid[r].map((s) => s || ''), '']);
+      continue;
+    }
+    const q = r < shown.length ? shown[r].q : -1;
     if (r === regRow) {
       label = c.cregs.length === 1 ? `\\lstick{$${texEscape(c.cregs[0].name)}$}` : '\\lstick{$c$}';
     } else if (opt.labels === 'name') {
-      const l = locate(c.qregs, r);
+      const l = locate(c.qregs, q);
       label = `\\lstick{$${texEscape(l.reg.name)}_{${l.idx}}$}`;
     } else if (opt.labels === 'ket0') label = '\\lstick{\\ket{0}}';
     const cells = [label];

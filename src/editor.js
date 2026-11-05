@@ -8,6 +8,7 @@
 import {
   GATES, makeOp, numQubits, locate, opQubits, opSpan, isBox, findOp, fits,
   placeOp, replaceOp, removeOp, removeQubit, trimCols, ensureCbit, clone,
+  isHidden, displayRows, setHidden, opVisible,
 } from './model.js';
 
 const ROW = 52;          // distance between wires
@@ -28,6 +29,7 @@ const EXPORT_CSS = `
 .glabel { font: 17px ${SERIF}; fill: #000; }
 .glabel .sub { font-size: 12px; } .glabel .rest { font-size: 13px; }
 .qlabel { font: 16px ${SERIF}; fill: #000; } .qlabel .idx { font-size: 11px; }
+.dots { font: 20px ${SERIF}; fill: #000; }
 .cbit, .tidx, .cond { font: 10px ${MONO}; fill: #555; }`.replace(/\n/g, ' ');
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -185,6 +187,7 @@ export class Editor {
   // `spare`: whether to add the empty columns the editor offers for dropping into
   layout(c, spare = true) {
     const n = numQubits(c);
+    const { rows, rowOf } = displayRows(c);
     const ncols = spare ? Math.max(c.cols.length + EXTRA_COLS, 8) : Math.max(c.cols.length, 1);
     const widths = [];
     for (let i = 0; i < ncols; i++) {
@@ -197,11 +200,12 @@ export class Editor {
     const hasCond = c.cols.some((col) => col.some((o) => o.cond));
     const top = TOP + (hasCond ? 12 : 0);
     return {
-      n, ncols, widths, lefts, top,
+      n, ncols, widths, lefts, top, rows,
       cx: (i) => lefts[i] + widths[i] / 2,
-      y: (q) => top + q * ROW,
+      y: (q) => top + rowOf[q] * ROW,         // of a qubit: hidden ones sit on their dots row
+      yRow: (r) => top + r * ROW,
       width: x + 24,
-      height: top + Math.max(0, n - 1) * ROW + 44,
+      height: top + Math.max(0, rows.length - 1) * ROW + 44,
     };
   }
 
@@ -213,10 +217,16 @@ export class Editor {
     let col = g.ncols - 1;
     for (let i = 0; i < g.ncols; i++) if (x < g.lefts[i] + g.widths[i]) { col = i; break; }
     if (x < LEFT - 10) return null;
-    const qf = (y - g.top) / ROW;
-    const q = Math.round(qf);
-    if (qf < -0.75 || qf > g.n - 0.25) return null;
-    return { col, q: Math.max(0, Math.min(g.n - 1, q)) };
+    const rf = (y - g.top) / ROW;
+    const nr = g.rows.length;
+    if (rf < -0.75 || rf > nr - 0.25) return null;
+    let row = Math.max(0, Math.min(nr - 1, Math.round(rf)));
+    // nothing can be placed on a row of dots: take the visible wire nearest the pointer
+    if (g.rows[row].dots) {
+      const toward = rf < row ? -1 : 1;
+      row = g.rows[row + toward] && !g.rows[row + toward].dots ? row + toward : row - toward;
+    }
+    return { col, q: g.rows[row].q };
   }
 
   hitPart(el) {
@@ -237,7 +247,7 @@ export class Editor {
     const n = g.n;
     // column guides
     for (let i = 0; i < g.ncols; i++) {
-      if (i % 2 === 0) parts.push(`<rect class="colband" x="${g.lefts[i]}" y="${g.top - ROW / 2}" width="${g.widths[i]}" height="${Math.max(n, 1) * ROW}"/>`);
+      if (i % 2 === 0) parts.push(`<rect class="colband" x="${g.lefts[i]}" y="${g.top - ROW / 2}" width="${g.widths[i]}" height="${Math.max(g.rows.length, 1) * ROW}"/>`);
     }
     if (this.hover && !this.drag && this.tool && this.hover.q < n) {
       const h = this.hover;
@@ -247,14 +257,7 @@ export class Editor {
       const h = preview.cell;
       parts.push(`<rect class="dropcell${preview.error ? ' bad' : ''}" x="${g.lefts[h.col] + 2}" y="${g.y(h.q) - ROW / 2 + 3}" width="${g.widths[h.col] - 4}" height="${ROW - 6}" rx="6"/>`);
     }
-    // wires and labels
-    for (let q = 0; q < n; q++) {
-      const l = locate(c.qregs, q);
-      const y = g.y(q);
-      parts.push(`<line class="wire" x1="${LEFT - 8}" y1="${y}" x2="${g.width - 10}" y2="${y}"/>`);
-      parts.push(`<g class="qlabel" data-q="${q}"><text x="${LEFT - 16}" y="${y + 5}" text-anchor="end">${esc(l.reg.name)}<tspan class="idx" dy="4">${l.idx}</tspan></text>` +
-        `<g class="qdel" data-delq="${q}" transform="translate(12 ${y})"><title>remove this qubit</title><circle r="8"/><path d="M-3.5-3.5L3.5 3.5M3.5-3.5L-3.5 3.5"/></g></g>`);
-    }
+    parts.push(this.wires(c, g, true));
     // operations
     c.cols.forEach((col, ci) => {
       for (const op of col) parts.push(this.renderOp(op, ci, g, op.id === sel, op.id === ghost ? (preview.error ? 'ghost bad' : 'ghost') : ''));
@@ -266,19 +269,37 @@ export class Editor {
     this.svg.innerHTML = parts.join('');
   }
 
+  // Wires and their labels; a run of hidden qubits is one row of dots, with no
+  // wire. `controls`: the buttons to remove, hide and show qubits.
+  wires(c, g, controls) {
+    const name = (q) => { const l = locate(c.qregs, q); return [esc(l.reg.name), l.idx]; };
+    return g.rows.map((row, r) => {
+      const y = g.yRow(r);
+      if (row.dots) {
+        const [a, i] = name(row.dots[0]);
+        const [b, j] = name(row.dots[row.dots.length - 1]);
+        const which = row.dots.length > 1 ? `${a}[${i}]–${b}[${j}]` : `${a}[${i}]`;
+        return `<g class="dots"${controls ? ` data-showq="${row.dots.join(',')}"` : ''}>` +
+          (controls ? `<title>show ${which}</title><rect class="hit" x="${LEFT - 44}" y="${y - ROW / 2 + 4}" width="36" height="${ROW - 8}"/>` : '') +
+          `<text x="${LEFT - 26}" y="${y + 8}" text-anchor="middle">⋮</text></g>`;
+      }
+      const [reg, idx] = name(row.q);
+      const label = `<text x="${LEFT - 16}" y="${y + 5}" text-anchor="end">${reg}<tspan class="idx" dy="4">${idx}</tspan></text>`;
+      const wire = `<line class="wire" x1="${LEFT - 8}" y1="${y}" x2="${g.width - 10}" y2="${y}"/>`;
+      if (!controls) return `${wire}<g class="qlabel">${label}</g>`;
+      return `${wire}<g class="qlabel" data-q="${row.q}">${label}` +
+        `<g class="qdel" data-delq="${row.q}" transform="translate(12 ${y})"><title>remove this qubit</title><circle r="8"/><path d="M-3.5-3.5L3.5 3.5M3.5-3.5L-3.5 3.5"/></g>` +
+        `<g class="qdel" data-hideq="${row.q}" transform="translate(12 ${y - 19})"><title>hide this qubit under ⋮</title><circle r="8"/><path class="dot" d="M0-4v0M0 0v0M0 4v0"/></g></g>`;
+    }).join('');
+  }
+
   // The circuit alone, as a standalone SVG document: no column guides, hover,
   // selection or delete buttons, and its own stylesheet in fixed light colours,
   // so it looks the same pasted anywhere. Returns { svg, width, height }.
   exportSvg() {
     const c = this.host.circuit();
     const g = this.layout(c, false);
-    const parts = [];
-    for (let q = 0; q < g.n; q++) {
-      const l = locate(c.qregs, q);
-      const y = g.y(q);
-      parts.push(`<line class="wire" x1="${LEFT - 8}" y1="${y}" x2="${g.width - 10}" y2="${y}"/>`);
-      parts.push(`<text class="qlabel" x="${LEFT - 16}" y="${y + 5}" text-anchor="end">${esc(l.reg.name)}<tspan class="idx" dy="4">${l.idx}</tspan></text>`);
-    }
+    const parts = [this.wires(c, g, false)];
     c.cols.forEach((col, ci) => { for (const op of col) parts.push(this.renderOp(op, ci, g, false, '')); });
     const body = parts.join('').replace(/<rect class="hit"[^>]*\/>/g, '').replace(/ data-[a-z]+="[^"]*"/g, '');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${g.width}" height="${g.height}" viewBox="0 0 ${g.width} ${g.height}">` +
@@ -287,6 +308,9 @@ export class Editor {
   }
 
   renderOp(op, ci, g, selected, extra) {
+    const c = this.host.circuit();
+    if (!opVisible(c, op)) return '';
+    const shown = (q) => !isHidden(c, q);
     const x = g.cx(ci);
     const y = g.y;
     const out = [];
@@ -305,9 +329,11 @@ export class Editor {
       out.push(`<rect class="hit" data-part="b" data-q="${op.targets[0]}" x="${bbox[0]}" y="${bbox[1]}" width="${bbox[2]}" height="${bbox[3]}"/>`);
       if (op.gate === 'swap') {
         op.targets.forEach((t, i) => {
-          out.push(`<g data-part="t${i}" data-q="${t}" class="part"><rect class="hit" x="${x - 11}" y="${y(t) - 11}" width="22" height="22"/>` +
+          if (shown(t)) out.push(`<g data-part="t${i}" data-q="${t}" class="part"><rect class="hit" x="${x - 11}" y="${y(t) - 11}" width="22" height="22"/>` +
             `<path class="swapx" d="M${x - 7} ${y(t) - 7}L${x + 7} ${y(t) + 7}M${x + 7} ${y(t) - 7}L${x - 7} ${y(t) + 7}"/></g>`);
         });
+      } else if (!op.targets.some(shown)) {
+        // the target is hidden: only the controls and the line into the dots are drawn
       } else if (op.controls.length && op.gate === 'x' && op.targets.length === 1) {
         const t = op.targets[0];
         out.push(`<g data-part="b" data-q="${t}" class="part"><circle class="oplus" cx="${x}" cy="${y(t)}" r="11"/>` +
@@ -338,12 +364,12 @@ export class Editor {
           const contiguous = thi - tlo + 1 === op.targets.length;
           const ordered = op.targets.every((t, i) => i === 0 || t > op.targets[i - 1]);
           if (!contiguous || !ordered) {
-            op.targets.forEach((t, i) => out.push(`<text class="tidx" x="${x - w / 2 + 3}" y="${y(t) + 4}">${i}</text>`));
+            op.targets.forEach((t, i) => shown(t) && out.push(`<text class="tidx" x="${x - w / 2 + 3}" y="${y(t) + 4}">${i}</text>`));
           }
         }
       }
       op.controls.forEach((k, i) => {
-        out.push(`<g data-part="c${i}" data-q="${k.q}" class="part"><rect class="hit" x="${x - 10}" y="${y(k.q) - 10}" width="20" height="20"/>` +
+        if (shown(k.q)) out.push(`<g data-part="c${i}" data-q="${k.q}" class="part"><rect class="hit" x="${x - 10}" y="${y(k.q) - 10}" width="20" height="20"/>` +
           `<circle class="${k.neg ? 'nctrl' : 'ctrl'}" cx="${x}" cy="${y(k.q)}" r="5.5"/></g>`);
       });
     }
@@ -382,6 +408,14 @@ export class Editor {
 
   onDown(e) {
     if (e.button !== 0) return;
+    const vis = e.target.closest && e.target.closest('[data-hideq], [data-showq]');
+    if (vis) {
+      const hide = 'hideq' in vis.dataset;
+      const qs = (hide ? vis.dataset.hideq : vis.dataset.showq).split(',').map(Number);
+      const err = this.host.commit((c) => setHidden(c, qs, hide));
+      if (err) this.host.toast(err);
+      return;
+    }
     const del = e.target.closest && e.target.closest('[data-delq]');
     if (del) {
       const q = +del.dataset.delq;
@@ -475,10 +509,15 @@ export class Editor {
       const f = findOp(c, id);
       if (!f) return null;
       const n = numQubits(c);
-      const moved = clone(f.op);
-      moved.targets = moved.targets.map((x) => x + dq);
-      moved.controls = moved.controls.map((k) => ({ ...k, q: k.q + dq }));
-      if (opQubits(moved).some((x) => x < 0 || x >= n)) return 'the gate would leave the circuit';
+      let moved;
+      // up and down step over hidden qubits, to the next wire that is drawn
+      for (let step = dq; ; step += dq) {
+        moved = clone(f.op);
+        moved.targets = moved.targets.map((x) => x + step);
+        moved.controls = moved.controls.map((k) => ({ ...k, q: k.q + step }));
+        if (opQubits(moved).some((x) => x < 0 || x >= n)) return 'the gate would leave the circuit';
+        if (!dq || !isHidden(c, moved.targets[0])) break;
+      }
       let col = f.col + dcol;
       if (col < 0) return null;
       c.cols[f.col] = c.cols[f.col].filter((o) => o.id !== id);

@@ -185,6 +185,11 @@ export function removeQubit(c, q) {
   loc.reg.size--;
   if (loc.reg.size === 0 && c.qregs.length > 1) c.qregs = c.qregs.filter((r) => r !== loc.reg);
   const shift = (x) => (x > q ? x - 1 : x);
+  if (c.hidden) {
+    c.hidden = c.hidden.filter((x) => x !== q).map(shift);
+    // never leave nothing to see
+    if (!c.hidden.length || c.hidden.length >= numQubits(c)) delete c.hidden;
+  }
   c.cols = c.cols.map((col) =>
     col.flatMap((op) => {
       if (op.gate === 'barrier') {
@@ -197,6 +202,42 @@ export function removeQubit(c, q) {
   );
   trimCols(c);
 }
+
+// ---------------------------------------------------------------- hidden qubits
+//
+// A qubit can be hidden from the drawing (never from the program): each run of
+// consecutive hidden qubits is drawn as a single row of vertical dots, in the
+// editor and in quantikz alike. `c.hidden` lists them, sorted; it is optional.
+
+export const isHidden = (c, q) => !!c.hidden && c.hidden.includes(q);
+
+// The rows of the drawing: { rows: [{ q } | { dots: [q, ...] }], rowOf: qubit -> row }.
+export function displayRows(c) {
+  const rows = [];
+  const rowOf = [];
+  for (let q = 0; q < numQubits(c); q++) {
+    const last = rows[rows.length - 1];
+    if (!isHidden(c, q)) rows.push({ q });
+    else if (last && last.dots) last.dots.push(q);
+    else rows.push({ dots: [q] });
+    rowOf.push(rows.length - 1);
+  }
+  return { rows, rowOf };
+}
+
+// Hide or show the qubits `qs`. Returns an error message, or null.
+export function setHidden(c, qs, hide) {
+  const n = numQubits(c);
+  const set = new Set(c.hidden || []);
+  for (const q of qs) hide ? set.add(q) : set.delete(q);
+  if (set.size >= n) return 'at least one qubit has to stay visible';
+  c.hidden = [...set].filter((q) => q < n).sort((a, b) => a - b);
+  if (!c.hidden.length) delete c.hidden;
+  return null;
+}
+
+// Is any part of `op` drawn?
+export const opVisible = (c, op) => opQubits(op).some((q) => !isHidden(c, q));
 
 // Make sure classical bit `b` exists (grows the last register / creates `c`).
 export function ensureCbit(c, b) {

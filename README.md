@@ -19,6 +19,11 @@ works offline from `file://`.
   already attached. Any gate can have any number of controls.
 - **Move** a gate by dragging it; drag a control dot or a swap end to move just that end.
   Drag anything off the circuit (or right-click it) to delete it.
+- **Hide** qubits under ⋮: hover a qubit's label and click the ⋮ button. Neighbouring
+  hidden qubits share one row of dots; click the dots to show them again. Only the drawing
+  changes (editor, PNG and quantikz, where the row is `\lstick{\vdots} \setwiretype{n}`),
+  never the program: gates entirely on hidden qubits are not drawn, and a gate partly on
+  them keeps its line into the dots.
 - **Edit** the selected gate in the side panel: parameters (`pi/4`, `theta`, `-2*pi/3`),
   target qubits, controls (`~2` is a negative control on qubit 2), the classical bit of a
   measurement, a classical condition. Arrow keys move the selected gate, `Del` deletes it.

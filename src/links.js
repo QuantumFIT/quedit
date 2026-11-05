@@ -3,13 +3,13 @@
 // A link carries the circuit as OpenQASM 3 plus, when it differs from the
 // automatic layout, the column of every operation:
 //
-//   #c=<base64url(OpenQASM 3)>&k=<col,col,...>&l=<labels>&m=<classical>&s=1
+//   #c=<base64url(OpenQASM 3)>&k=<col.col...>&h=<q.q...>&l=<labels>&m=<classical>&s=1
 //
 // What such a link *means* is decided by the build that reads it, so a copied
 // link points at the frozen copy of the build that made it, /v/<tag>/ (see
 // docs/VERSIONS.md).
 
-import { allOps, clone, sortCol, fits, compact, numQubits } from './model.js';
+import { allOps, clone, sortCol, fits, compact, numQubits, setHidden } from './model.js';
 import { parseQasm, toQasm } from './qasm.js';
 import { DEFAULT_OPTIONS } from './quantikz.js';
 
@@ -43,6 +43,7 @@ export function circuitToFragment(c, options = {}) {
   compact(auto);
   const cols = columnsOf(c);
   if (cols.join() !== columnsOf(auto).join()) p.set('k', cols.join('.'));
+  if (c.hidden && c.hidden.length) p.set('h', c.hidden.join('.'));
   const opt = { ...DEFAULT_OPTIONS, ...options };
   if (LABELS[opt.labels]) p.set('l', LABELS[opt.labels]);
   if (CLASSICAL[opt.classical]) p.set('m', CLASSICAL[opt.classical]);
@@ -69,6 +70,11 @@ export function fragmentToCircuit(fragment) {
       });
       if (ok) circuit.cols = placed.cols.map(sortCol);
     }
+  }
+  const h = p.get('h');
+  if (h) {
+    const qs = h.split('.').map(Number);
+    if (qs.every((q) => Number.isInteger(q) && q >= 0 && q < numQubits(circuit))) setHidden(circuit, qs, true);
   }
   const options = {
     labels: inverse(LABELS)[p.get('l') || ''] || 'name',
