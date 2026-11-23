@@ -321,7 +321,7 @@ button.primary { background: var(--ink); color: var(--plate); border-color: var(
 
 /* ---- floating bits ------------------------------------------------------- */
 
-.ghost {
+#ghost {
   position: fixed;
   z-index: 10;
   pointer-events: none;
