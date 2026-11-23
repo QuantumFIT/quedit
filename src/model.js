@@ -149,6 +149,13 @@ export function replaceOp(c, id, op) {
   trimCols(c);
 }
 
+// An empty column before column i, to place gates into later.
+export function insertCol(c, i) {
+  if (i < 0 || i >= c.cols.length) return 'there is no column there';
+  c.cols.splice(i, 0, []);
+  return null;
+}
+
 export function trimCols(c) {
   while (c.cols.length && c.cols[c.cols.length - 1].length === 0) c.cols.pop();
 }

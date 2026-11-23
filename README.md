@@ -28,6 +28,9 @@ works offline from `file://`.
   onto another qubit of the same gate, the two trade places; drag the line between them
   to move the whole gate.
   Drag anything off the circuit (or right-click it) to delete it.
+- **Insert an empty column** with the ＋ that appears above the wires between columns when
+  the pointer is over the circuit; it stays empty until something is put there (or
+  `compact` removes it).
 - **Hide** qubits under ⋮: hover a qubit's label and click the ⋮ button. Neighbouring
   hidden qubits share one row of dots; click the dots to show them again. Only the drawing
   changes (editor, PNG and quantikz, where the row is `\lstick{\vdots} \setwiretype{n}`),

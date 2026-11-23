@@ -8,7 +8,7 @@
 import {
   GATES, makeOp, numQubits, locate, opQubits, opSpan, isBox, findOp, fits,
   placeOp, replaceOp, removeOp, removeQubit, trimCols, ensureCbit, clone,
-  drawnApart, isHidden, displayRows, setHidden, opVisible,
+  drawnApart, insertCol, isHidden, displayRows, setHidden, opVisible,
 } from './model.js';
 
 const ROW = 52;          // distance between wires
@@ -292,6 +292,18 @@ export class Editor {
       parts.push(`<rect class="dropcell${preview.error ? ' bad' : ''}" x="${g.lefts[h.col] + 2}" y="${g.y(h.q) - ROW / 2 + 3}" width="${g.widths[h.col] - 4}" height="${ROW - 6}" rx="6"/>`);
     }
     parts.push(this.wires(c, g, true));
+    // above the wires, between columns: insert an empty column there
+    if (!preview) {
+      const y0 = g.top - ROW / 2 + 2, y1 = g.yRow(Math.max(g.rows.length - 1, 0)) + ROW / 2;
+      for (let i = 0; i < c.cols.length; i++) {
+        if (!g.widths[i]) continue;
+        const x = g.lefts[i];
+        parts.push(`<g class="inscol" data-inscol="${i}"><title>insert an empty column here</title>` +
+          `<line class="insline" x1="${x}" y1="${y0 + 7}" x2="${x}" y2="${y1}"/>` +
+          `<rect class="hit" x="${x - 9}" y="${y0 - 9}" width="18" height="18"/>` +
+          `<circle cx="${x}" cy="${y0}" r="6.5"/><path d="M${x - 3.5} ${y0}H${x + 3.5}M${x} ${y0 - 3.5}V${y0 + 3.5}"/></g>`);
+      }
+    }
     // operations
     c.cols.forEach((col, ci) => {
       for (const op of col) parts.push(this.renderOp(op, ci, g, op.id === sel, op.id === ghost ? (preview.error ? 'ghost bad' : 'ghost') : ''));
@@ -484,6 +496,12 @@ export class Editor {
       const hide = 'hideq' in vis.dataset;
       const qs = (hide ? vis.dataset.hideq : vis.dataset.showq).split(',').map(Number);
       const err = this.host.commit((c) => setHidden(c, qs, hide));
+      if (err) this.host.toast(err);
+      return;
+    }
+    const ins = e.target.closest && e.target.closest('[data-inscol]');
+    if (ins) {
+      const err = this.host.commit((c) => insertCol(c, +ins.dataset.inscol));
       if (err) this.host.toast(err);
       return;
     }

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyCircuit, setHidden, displayRows, removeQubit } from '../src/model.js';
+import { emptyCircuit, setHidden, displayRows, removeQubit, insertCol } from '../src/model.js';
+import { parseQasm } from '../src/qasm.js';
+import { circuitToFragment, fragmentToCircuit } from '../src/links.js';
 
 test('hidden qubits: runs become one row, and indices follow removals', () => {
   const c = emptyCircuit(6);
@@ -18,4 +20,14 @@ test('hidden qubits: runs become one row, and indices follow removals', () => {
   setHidden(d, [1], true);
   removeQubit(d, 0);
   assert.equal(d.hidden, undefined);
+});
+
+test('an inserted empty column stays where it was put', () => {
+  const c = parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[1] q; h q[0]; x q[0];').circuit;
+  assert.equal(insertCol(c, 1), null);
+  assert.deepEqual(c.cols.map((col) => col.map((o) => o.gate)), [['h'], [], ['x']]);
+  assert.match(insertCol(c, 3) || '', /no column/);
+  // and a link keeps it
+  const back = fragmentToCircuit(circuitToFragment(c)).circuit;
+  assert.deepEqual(back.cols.map((col) => col.map((o) => o.gate)), [['h'], [], ['x']]);
 });
