@@ -16,11 +16,15 @@ works offline from `file://`.
   z s t` pick the gate, `m` a measurement, `c` a control, `w` a swap, `b` a barrier.
   A picked two-qubit gate (CNOT, CZ, SWAP, R<sub>XX</sub>…) is placed by pressing on the
   control qubit and dragging to the target; a plain click pairs it with the next qubit.
+  A Toffoli is placed the same way, its second control going between the two or just
+  past the target; drag its parts afterwards to arrange the three qubits in any order.
 - **Controls**: drop a ● (or ○ for a negative control) into a column that has a gate —
   it joins the nearest gate there. CNOT and CZ in the palette come with their control
   already attached. Any gate can have any number of controls.
 - **Move** a gate by dragging it. A control, or the target of a controlled gate (⊕, the
-  box of a controlled H, a swap end), moves on its own to the qubit it is dropped on —
+  box of a controlled H), a swap end or an end of R<sub>XX</sub>/R<sub>YY</sub>/R<sub>ZZ</sub>
+  (on neighbouring wires, the upper or lower half of the box; the label moves the whole
+  gate) moves on its own to the qubit it is dropped on —
   onto another qubit of the same gate, the two trade places; drag the line between them
   to move the whole gate.
   Drag anything off the circuit (or right-click it) to delete it.

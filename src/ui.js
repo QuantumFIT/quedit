@@ -31,6 +31,7 @@ let editor;
 
 const icon = {
   cnot: '<svg width="22" height="30" viewBox="0 0 22 30"><path d="M11 5V25" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="5" r="3.2" fill="currentColor"/><circle cx="11" cy="21" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4 21H18M11 14V28" stroke="currentColor" stroke-width="1.3"/></svg>',
+  ccx: '<svg width="22" height="36" viewBox="0 0 22 36"><path d="M11 5V33" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="5" r="3.2" fill="currentColor"/><circle cx="11" cy="15" r="3.2" fill="currentColor"/><circle cx="11" cy="27" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4 27H18" stroke="currentColor" stroke-width="1.3"/></svg>',
   cz: '<svg width="22" height="30" viewBox="0 0 22 30"><path d="M11 5V25" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="5" r="3.2" fill="currentColor"/><circle cx="11" cy="25" r="3.2" fill="currentColor"/></svg>',
   swap: '<svg width="22" height="30" viewBox="0 0 22 30"><path d="M11 5V25M6 0L16 10M16 0L6 10M6 20L16 30M16 20L6 30" stroke="currentColor" stroke-width="1.3" transform="translate(0 0)"/></svg>',
   ctrl: '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 9V18" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="4" fill="currentColor"/></svg>',
@@ -50,6 +51,7 @@ const PALETTE = [
   ['Multi qubit', [
     { key: 'cnot', kind: 'cnot', html: icon.cnot, title: 'CNOT' },
     { key: 'cz', kind: 'cz', html: icon.cz, title: 'controlled Z' },
+    { key: 'ccx', kind: 'ccx', html: icon.ccx, title: 'Toffoli' },
     { key: 'swap', kind: 'gate', gate: 'swap', html: icon.swap, title: 'SWAP' },
     ...['rxx', 'ryy', 'rzz'].map((g) => ({ key: g, kind: 'gate', gate: g, html: gateTile(g), title: g })),
     { key: 'custom', kind: 'custom', html: 'custom…', wide: true, title: 'a named box on one or more wires' },

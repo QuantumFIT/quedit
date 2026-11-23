@@ -63,7 +63,7 @@ function opWidth(op) {
 // ---------------------------------------------------------------- editing
 
 // Whether a palette tool is placed by dragging from its first qubit to its second.
-export const spansTwo = (tool) => tool.kind === 'cnot' || tool.kind === 'cz' ||
+export const spansTwo = (tool) => tool.kind === 'cnot' || tool.kind === 'cz' || tool.kind === 'ccx' ||
   (tool.kind === 'gate' && !!GATES[tool.gate] && GATES[tool.gate].qubits === 2);
 
 // What a palette tool creates when dropped on qubit q. Returns an op, or a
@@ -85,6 +85,20 @@ export function opFromTool(tool, q, c, q2) {
       const [a, b] = pair();
       const [ctl, tgt] = a === q ? [a, b] : [b, a];
       return makeOp(tool.kind === 'cnot' ? 'x' : 'z', [tgt], { controls: [{ q: ctl, neg: false }] });
+    }
+    case 'ccx': {
+      if (n < 3) return 'a Toffoli gate needs three qubits';
+      let ctl2, tgt;
+      if (q2 != null && q2 !== q) {
+        // the second control goes between the two, or else just past the target
+        const dir = Math.sign(q2 - q);
+        tgt = q2;
+        ctl2 = Math.abs(q2 - q) > 1 ? q + dir : q2 + dir >= 0 && q2 + dir < n ? q2 + dir : q - dir;
+      } else {
+        const lo = Math.min(q, n - 3);
+        [q, ctl2, tgt] = [lo, lo + 1, lo + 2];
+      }
+      return makeOp('x', [tgt], { controls: [{ q, neg: false }, { q: ctl2, neg: false }] });
     }
     case 'measure': {
       return makeOp('measure', [q], { cbit: q });
@@ -139,6 +153,8 @@ export function applyDrop(c, drag, cell) {
     moved.controls = op.controls.map((k) => ({ ...k, q: swap(k.q) }));
     if (isCtrl) moved.controls[i].q = cell.q;
     else moved.targets[i] = cell.q;
+    // the two qubits of a SWAP or R_XX/YY/ZZ are interchangeable: keep them in order
+    if (Object.hasOwn(GATES, op.gate) && GATES[op.gate].qubits === 2) moved.targets.sort((p, q) => p - q);
     c.cols[found.col] = c.cols[found.col].filter((o) => o.id !== op.id);
     placeOp(c, moved, cell.col);
     trimCols(c);
@@ -170,6 +186,10 @@ function attachControl(c, cell, neg) {
   replaceOp(c, op.id, moved);
   return null;
 }
+
+// A symmetric two-qubit gate drawn as one box over two neighbouring wires.
+const pairOnNeighbours = (op) => op.targets.length === 2 && op.gate !== 'swap' && !drawnApart(op) &&
+  Object.hasOwn(GATES, op.gate) && GATES[op.gate].qubits === 2;
 
 // ---------------------------------------------------------------- editor
 
@@ -392,7 +412,7 @@ export class Editor {
       } else if (drawnApart(op)) {
         const [m, s, r] = labelParts(op);
         for (const t of op.targets.filter(shown)) {
-          out.push(`<g data-part="b" data-q="${t}" class="part"><rect class="box" x="${x - w / 2}" y="${y(t) - BOX / 2}" width="${w}" height="${BOX}"/>` +
+          out.push(`<g data-part="t${op.targets.indexOf(t)}" data-q="${t}" class="part"><rect class="box" x="${x - w / 2}" y="${y(t) - BOX / 2}" width="${w}" height="${BOX}"/>` +
             `<text class="glabel" x="${x}" y="${y(t) + 6}" text-anchor="middle">${esc(m)}${s ? `<tspan class="sub" dy="4">${esc(s)}</tspan>` : ''}${r ? `<tspan class="rest"${s ? ' dy="-4"' : ''}>${esc(r)}</tspan>` : ''}</text></g>`);
         }
       } else {
@@ -403,6 +423,14 @@ export class Editor {
         const bpart = op.controls.length && op.targets.length === 1 ? 't0' : 'b';
         out.push(`<g data-part="${bpart}" data-q="${op.targets[0]}" class="part"><rect class="box" x="${x - w / 2}" y="${y(tlo) - BOX / 2}" width="${w}" height="${y(thi) - y(tlo) + BOX}"/>` +
           `<text class="glabel" x="${x}" y="${yc + 6}" text-anchor="middle">${esc(m)}${s ? `<tspan class="sub" dy="4">${esc(s)}</tspan>` : ''}${r ? `<tspan class="rest"${s ? ' dy="-4"' : ''}>${esc(r)}</tspan>` : ''}</text></g>`);
+        if (pairOnNeighbours(op) && op.targets.every(shown)) {
+          // each half of the box drags its own end; the band around the label, the gate
+          const mid = (y(op.targets[0]) + y(op.targets[1])) / 2;
+          op.targets.forEach((t, i) => {
+            const [y0, y1] = y(t) < mid ? [y(t) - BOX / 2, mid - 9] : [mid + 9, y(t) + BOX / 2];
+            out.push(`<rect class="hit" data-part="t${i}" data-q="${t}" x="${x - w / 2}" y="${y0}" width="${w}" height="${y1 - y0}"/>`);
+          });
+        }
         if (isBox(op)) {
           const contiguous = thi - tlo + 1 === op.targets.length;
           const ordered = op.targets.every((t, i) => i === 0 || t > op.targets[i - 1]);

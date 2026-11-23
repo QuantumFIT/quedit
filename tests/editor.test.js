@@ -88,3 +88,24 @@ test('dragging a target moves it alone, and onto a control trades the two', () =
   applyDrop(c, { kind: 'op', id, part: 'c0', grabQ: 2 }, { col: 0, q: 1 });
   assert.deepEqual(shape(c), ['h>2 x1>0']);
 });
+
+test('a Toffoli goes from the pressed control to the target, the other control between or past it', () => {
+  const c = load('qubit[4] q;');
+  applyDrop(c, { kind: 'new', tool: { kind: 'ccx' }, q2: 3 }, { col: 0, q: 0 });
+  applyDrop(c, { kind: 'new', tool: { kind: 'ccx' }, q2: 1 }, { col: 1, q: 0 });
+  applyDrop(c, { kind: 'new', tool: { kind: 'ccx' } }, { col: 2, q: 3 });
+  assert.deepEqual(shape(c), ['x01>3', 'x02>1', 'x12>3']);
+  assert.match(applyDrop(load('qubit[2] q;'), { kind: 'new', tool: { kind: 'ccx' } }, { col: 0, q: 0 }) || '', /three qubits/);
+});
+
+test('an end of R_ZZ is dragged on its own', () => {
+  const c = load('qubit[4] q; rzz(1) q[0], q[1];');
+  const id = allOps(c)[0].id;
+  applyDrop(c, { kind: 'op', id, part: 't1', grabQ: 1 }, { col: 0, q: 3 });
+  assert.deepEqual(shape(c), ['rzz>0,3']);
+  // past the other end: still in order, so no input numbers are drawn
+  applyDrop(c, { kind: 'op', id, part: 't0', grabQ: 0 }, { col: 0, q: 2 });
+  assert.deepEqual(shape(c), ['rzz>2,3']);
+  applyDrop(c, { kind: 'op', id, part: 't1', grabQ: 3 }, { col: 0, q: 1 });
+  assert.deepEqual(shape(c), ['rzz>1,2']);
+});
