@@ -93,6 +93,11 @@ export function opSpan(op) {
 // Is `op` a gate drawn as a single box over several wires?
 export const isBox = (op) => op.gate !== 'swap' && op.gate !== 'barrier' && op.targets.length > 1;
 
+// A symmetric two-qubit gate (R_XX, R_YY, R_ZZ) on qubits that are not neighbours is
+// drawn as a box on each, joined by a line, rather than one box over the wires between.
+export const drawnApart = (op) => op.targets.length === 2 && op.gate !== 'swap' &&
+  Object.hasOwn(GATES, op.gate) && GATES[op.gate].qubits === 2 && Math.abs(op.targets[0] - op.targets[1]) > 1;
+
 export function allOps(c) {
   const ops = [];
   for (const col of c.cols) for (const op of sortCol(col)) ops.push(op);

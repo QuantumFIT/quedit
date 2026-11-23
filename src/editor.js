@@ -8,7 +8,7 @@
 import {
   GATES, makeOp, numQubits, locate, opQubits, opSpan, isBox, findOp, fits,
   placeOp, replaceOp, removeOp, removeQubit, trimCols, ensureCbit, clone,
-  isHidden, displayRows, setHidden, opVisible,
+  drawnApart, isHidden, displayRows, setHidden, opVisible,
 } from './model.js';
 
 const ROW = 52;          // distance between wires
@@ -347,7 +347,8 @@ export class Editor {
       // same dots from above and below do not look like one.
       const ty = op.targets.filter(shown).map(y);
       const symbol = op.gate === 'swap' || (op.controls.length && ['x', 'z'].includes(op.gate) && op.targets.length === 1);
-      const boxAt = (yy) => !symbol && ty.length > 0 && yy >= Math.min(...ty) && yy <= Math.max(...ty);
+      const boxAt = (yy) => !symbol && ty.length > 0 &&
+        (drawnApart(op) ? ty.includes(yy) : yy >= Math.min(...ty) && yy <= Math.max(...ty));
       for (const yy of new Set(opQubits(op).filter((q) => !shown(q)).map(y))) {
         const from = yy < ytop ? ytop : yy > ybot ? ybot : null;
         if (from == null) continue;
@@ -388,6 +389,12 @@ export class Editor {
         const t = op.targets[0];
         out.push(`<g data-part="b" data-q="${t}" class="part"><rect class="box" x="${x - w / 2}" y="${y(t) - BOX / 2}" width="${w}" height="${BOX}"/>` +
           `<text class="glabel" x="${x}" y="${y(t) + 6}" text-anchor="middle">|0⟩</text></g>`);
+      } else if (drawnApart(op)) {
+        const [m, s, r] = labelParts(op);
+        for (const t of op.targets.filter(shown)) {
+          out.push(`<g data-part="b" data-q="${t}" class="part"><rect class="box" x="${x - w / 2}" y="${y(t) - BOX / 2}" width="${w}" height="${BOX}"/>` +
+            `<text class="glabel" x="${x}" y="${y(t) + 6}" text-anchor="middle">${esc(m)}${s ? `<tspan class="sub" dy="4">${esc(s)}</tspan>` : ''}${r ? `<tspan class="rest"${s ? ' dy="-4"' : ''}>${esc(r)}</tspan>` : ''}</text></g>`);
+        }
       } else {
         const tlo = Math.min(...op.targets.filter(shown)), thi = Math.max(...op.targets.filter(shown));
         const [m, s, r] = labelParts(op);

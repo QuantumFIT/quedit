@@ -109,3 +109,11 @@ test('hidden qubits: one row of dots, stubs toward it, and no empty columns', ()
   setHidden(g, [1, 2], true);
   assert.match(toQuantikz(g), /\\gate\{H\} \\wire\[d\]\[1\]\[dash pattern=on 5\.5mm/);
 });
+
+test('R_ZZ on qubits apart is a box on each, joined by a line; on neighbours one box', () => {
+  const tex = toQuantikz(parseQasm('OPENQASM 3.0; include "stdgates.inc"; qubit[4] q; rzz(1) q[3], q[0]; rxx(1) q[1], q[2];').circuit);
+  const rows = tex.split('\n').filter((l) => l.startsWith('\\lstick')).map((l) => l.replace(/\s*\\\\$/, '').split(/\s*&\s*/));
+  assert.equal(rows[0][1], '\\gate{R_{ZZ}(1)} \\wire[d][3]{q}');
+  assert.equal(rows[3][1], '\\gate{R_{ZZ}(1)}');
+  assert.equal(rows[1][2], '\\gate[wires=2]{R_{XX}(1)}');
+});

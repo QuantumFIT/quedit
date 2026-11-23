@@ -1,6 +1,8 @@
 // Export to LaTeX quantikz.
 
-import { GATES, numQubits, numCbits, locate, sortCol, opSpan, opQubits, isBox, isHidden, displayRows, opVisible } from './model.js';
+import {
+  GATES, numQubits, numCbits, locate, sortCol, opSpan, opQubits, isBox, drawnApart, isHidden, displayRows, opVisible,
+} from './model.js';
 
 const GREEK = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'theta', 'lambda', 'phi', 'pi', 'psi', 'omega', 'sigma', 'tau', 'mu', 'nu'];
 const UNI = { 'π': '\\pi', 'θ': '\\theta', 'φ': '\\phi', 'λ': '\\lambda', 'γ': '\\gamma', 'α': '\\alpha', 'β': '\\beta', 'τ': '\\tau' };
@@ -89,6 +91,11 @@ export function toQuantikz(c, options = {}) {
         cell(a, `\\swap{${b - a}}`);
         cell(b, '\\targX{}');
         anchors = [a, b];
+      } else if (drawnApart(op)) {
+        const [a, b] = op.targets.map(row).sort((x, y) => x - y);
+        cell(a, `\\gate{${gateTex(op)}} \\wire[d][${b - a}]{q}`);
+        cell(b, `\\gate{${gateTex(op)}}`);
+        anchors = [a, b];
       } else if (isBox(op)) {
         const [lo, hi] = [row(Math.min(...op.targets)), row(Math.max(...op.targets))];
         cell(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
@@ -113,7 +120,7 @@ export function toQuantikz(c, options = {}) {
     const rs = [];
     const boxed = new Set();     // rows where the part is a box, which a stub has to clear
     const targets = op.targets.filter((q) => !hid(q));
-    if (targets.length && isBox(op)) {
+    if (targets.length && isBox(op) && !drawnApart(op)) {
       const [lo, hi] = [row(Math.min(...targets)), row(Math.max(...targets))];
       cell(lo, `\\gate[wires=${hi - lo + 1}]{${gateTex(op)}}`);
       for (let r = lo + 1; r <= hi; r++) if (shown[r].q != null) cell(r, '\\qw');
