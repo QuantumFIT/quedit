@@ -62,17 +62,22 @@ function opWidth(op) {
 
 // ---------------------------------------------------------------- editing
 
+// Whether a palette tool is placed by dragging from its first qubit to its second.
+export const spansTwo = (tool) => tool.kind === 'cnot' || tool.kind === 'cz' ||
+  (tool.kind === 'gate' && !!GATES[tool.gate] && GATES[tool.gate].qubits === 2);
+
 // What a palette tool creates when dropped on qubit q. Returns an op, or a
-// string explaining why it cannot be placed.
-export function opFromTool(tool, q, c) {
+// string explaining why it cannot be placed. A two-qubit tool goes from q (the
+// control) to q2 (the target), or to a neighbour of q when q2 is not given.
+export function opFromTool(tool, q, c, q2) {
   const n = numQubits(c);
-  const pair = () => (q + 1 < n ? [q, q + 1] : [q - 1, q]);
+  const pair = () => (q2 != null && q2 !== q ? [q, q2] : q + 1 < n ? [q, q + 1] : [q - 1, q]);
   switch (tool.kind) {
     case 'gate': {
       const def = GATES[tool.gate];
       const nq = (def && def.qubits) || 1;
       if (nq === 2 && n < 2) return 'this gate needs two qubits';
-      return makeOp(tool.gate, nq === 2 ? pair() : [q]);
+      return makeOp(tool.gate, nq === 2 ? pair().sort((a, b) => a - b) : [q]);
     }
     case 'cnot':
     case 'cz': {
@@ -104,7 +109,7 @@ export function applyDrop(c, drag, cell) {
   if (drag.kind === 'new') {
     if (off) return 'drop the gate onto a wire';
     if (drag.tool.kind === 'ctrl') return attachControl(c, cell, drag.tool.neg);
-    const op = opFromTool(drag.tool, cell.q, c);
+    const op = opFromTool(drag.tool, cell.q, c, drag.q2);
     if (typeof op === 'string') return op;
     if (op.gate === 'measure') ensureCbit(c, op.cbit);
     placeOp(c, op, cell.col);
@@ -115,21 +120,28 @@ export function applyDrop(c, drag, cell) {
   if (!found) return 'operation vanished';
   const op = found.op;
   const part = drag.part;
-  if (part.startsWith('c') || (part.startsWith('t') && op.gate === 'swap')) {
-    // move a single control dot / swap end, vertically
+  if (part.startsWith('c') || part.startsWith('t')) {
+    // move a single control dot / target to the cell; the rest of the gate keeps
+    // its qubits and follows into the column
     const isCtrl = part.startsWith('c');
     const i = +part.slice(1);
     const moved = clone(op);
     if (off) {
       if (!isCtrl) { removeOp(c, op.id); return null; }
       moved.controls.splice(i, 1);
-    } else {
-      const others = opQubits(op).filter((x) => x !== (isCtrl ? op.controls[i].q : op.targets[i]));
-      if (others.includes(cell.q)) return 'that qubit is already used by this gate';
-      if (isCtrl) moved.controls[i].q = cell.q;
-      else moved.targets[i] = cell.q;
+      replaceOp(c, op.id, moved);
+      return null;
     }
-    replaceOp(c, op.id, moved);
+    const from = isCtrl ? op.controls[i].q : op.targets[i];
+    // onto another part of the same gate: the two trade places
+    const swap = (x) => (x === cell.q ? from : x);
+    moved.targets = op.targets.map(swap);
+    moved.controls = op.controls.map((k) => ({ ...k, q: swap(k.q) }));
+    if (isCtrl) moved.controls[i].q = cell.q;
+    else moved.targets[i] = cell.q;
+    c.cols[found.col] = c.cols[found.col].filter((o) => o.id !== op.id);
+    placeOp(c, moved, cell.col);
+    trimCols(c);
     return null;
   }
   // move the whole operation
@@ -357,11 +369,12 @@ export class Editor {
         // the target is hidden: only the controls and the line into the dots are drawn
       } else if (op.controls.length && op.gate === 'x' && op.targets.length === 1) {
         const t = op.targets[0];
-        out.push(`<g data-part="b" data-q="${t}" class="part"><circle class="oplus" cx="${x}" cy="${y(t)}" r="11"/>` +
+        out.push(`<g data-part="t0" data-q="${t}" class="part"><circle class="oplus" cx="${x}" cy="${y(t)}" r="11"/>` +
           `<path class="oplusx" d="M${x - 11} ${y(t)}H${x + 11}M${x} ${y(t) - 11}V${y(t) + 11}"/></g>`);
       } else if (op.controls.length && op.gate === 'z' && op.targets.length === 1) {
         const t = op.targets[0];
-        out.push(`<g data-part="b" data-q="${t}" class="part"><circle class="ctrl" cx="${x}" cy="${y(t)}" r="5.5"/></g>`);
+        out.push(`<g data-part="t0" data-q="${t}" class="part"><rect class="hit" x="${x - 10}" y="${y(t) - 10}" width="20" height="20"/>` +
+          `<circle class="ctrl" cx="${x}" cy="${y(t)}" r="5.5"/></g>`);
       } else if (op.gate === 'measure') {
         const t = op.targets[0];
         const yy = y(t);
@@ -379,7 +392,9 @@ export class Editor {
         const tlo = Math.min(...op.targets.filter(shown)), thi = Math.max(...op.targets.filter(shown));
         const [m, s, r] = labelParts(op);
         const yc = (y(tlo) + y(thi)) / 2;
-        out.push(`<g data-part="b" data-q="${op.targets[0]}" class="part"><rect class="box" x="${x - w / 2}" y="${y(tlo) - BOX / 2}" width="${w}" height="${y(thi) - y(tlo) + BOX}"/>` +
+        // the box of a controlled single-target gate is its target, dragged on its own
+        const bpart = op.controls.length && op.targets.length === 1 ? 't0' : 'b';
+        out.push(`<g data-part="${bpart}" data-q="${op.targets[0]}" class="part"><rect class="box" x="${x - w / 2}" y="${y(tlo) - BOX / 2}" width="${w}" height="${y(thi) - y(tlo) + BOX}"/>` +
           `<text class="glabel" x="${x}" y="${yc + 6}" text-anchor="middle">${esc(m)}${s ? `<tspan class="sub" dy="4">${esc(s)}</tspan>` : ''}${r ? `<tspan class="rest"${s ? ' dy="-4"' : ''}>${esc(r)}</tspan>` : ''}</text></g>`);
         if (isBox(op)) {
           const contiguous = thi - tlo + 1 === op.targets.length;
@@ -450,11 +465,18 @@ export class Editor {
     }
     const hit = this.hitPart(e.target);
     if (hit) {
-      this.startDrag({ kind: 'op', id: hit.id, part: hit.part, grabQ: hit.q, x0: e.clientX, y0: e.clientY }, e);
+      // a gate moves by as many wires as the pointer does, from wherever it was grabbed
+      const at = this.cellAt(e.clientX, e.clientY);
+      this.startDrag({ kind: 'op', id: hit.id, part: hit.part, grabQ: at ? at.q : hit.q, x0: e.clientX, y0: e.clientY }, e);
       return;
     }
     if (this.tool) {
       const cell = this.cellAt(e.clientX, e.clientY);
+      if (cell && spansTwo(this.tool) && numQubits(this.host.circuit()) > 1) {
+        // press on the control, drag to the target
+        this.startDrag({ kind: 'span', tool: this.tool, from: cell, q2: null, shift: e.shiftKey, x0: e.clientX, y0: e.clientY }, e);
+        return;
+      }
       if (cell) {
         const drag = { kind: 'new', tool: this.tool };
         const err = this.host.commit((c) => applyDrop(c, drag, cell));
@@ -477,6 +499,16 @@ export class Editor {
     if (d.started && (same || (!d.cell && !cell))) return;
     d.started = true;
     d.cell = cell;
+    if (d.kind === 'span') {
+      // the column stays where the press was; only the qubit follows the pointer
+      if (cell) d.q2 = cell.q;
+      const c = clone(this.host.circuit());
+      const probe = { kind: 'new', tool: d.tool, q2: d.q2 };
+      const error = applyDrop(c, probe, d.from);
+      if (error) this.render({ circuit: this.host.circuit(), cell: d.from, error });
+      else this.render({ circuit: c, id: probe.createdId, cell: d.from });
+      return;
+    }
     if (d.kind === 'new' && !cell) { this.render(); return; }
     const c = clone(this.host.circuit());
     const probe = { ...d };
@@ -494,6 +526,16 @@ export class Editor {
     window.removeEventListener('pointercancel', this.onUp);
     this.host.showGhost?.(null);
     if (e.type === 'pointercancel') { this.render(); return; }
+    if (d.kind === 'span') {
+      // a click without dragging pairs the qubit with its neighbour
+      const drag = { kind: 'new', tool: d.tool, q2: d.moved ? d.q2 : null };
+      const err = this.host.commit((c) => applyDrop(c, drag, d.from));
+      if (err) this.host.toast(err);
+      else if (!d.shift) this.host.select(drag.createdId);
+      if (!d.shift) this.host.setTool(null);
+      this.render();
+      return;
+    }
     if (!d.moved) {
       if (d.kind === 'new') this.host.setTool(this.tool && this.tool.key === d.tool.key ? null : d.tool);
       else this.host.select(d.id);

@@ -14,10 +14,15 @@ works offline from `file://`.
 - **Place gates** by dragging them from the palette onto a wire, or click a gate to pick
   it and click on the circuit to place it (Shift-click to place several). Keyboard: `h x y
   z s t` pick the gate, `m` a measurement, `c` a control, `w` a swap, `b` a barrier.
+  A picked two-qubit gate (CNOT, CZ, SWAP, R<sub>XX</sub>…) is placed by pressing on the
+  control qubit and dragging to the target; a plain click pairs it with the next qubit.
 - **Controls**: drop a ● (or ○ for a negative control) into a column that has a gate —
   it joins the nearest gate there. CNOT and CZ in the palette come with their control
   already attached. Any gate can have any number of controls.
-- **Move** a gate by dragging it; drag a control dot or a swap end to move just that end.
+- **Move** a gate by dragging it. A control, or the target of a controlled gate (⊕, the
+  box of a controlled H, a swap end), moves on its own to the qubit it is dropped on —
+  onto another qubit of the same gate, the two trade places; drag the line between them
+  to move the whole gate.
   Drag anything off the circuit (or right-click it) to delete it.
 - **Hide** qubits under ⋮: hover a qubit's label and click the ⋮ button. Neighbouring
   hidden qubits share one row of dots; click the dots to show them again. Only the drawing

@@ -66,3 +66,25 @@ test('a measurement creates the classical bit it writes', () => {
   assert.equal(numCbits(c), 3);
   assert.equal(allOps(c)[0].cbit, 2);
 });
+
+test('a two-qubit gate goes from the pressed qubit to the one it was dragged to', () => {
+  const c = load('qubit[4] q;');
+  applyDrop(c, { kind: 'new', tool: { kind: 'cnot' }, q2: 1 }, { col: 0, q: 3 });
+  applyDrop(c, { kind: 'new', tool: { kind: 'cz' }, q2: 3 }, { col: 1, q: 0 });
+  applyDrop(c, { kind: 'new', tool: { kind: 'gate', gate: 'rzz' }, q2: 0 }, { col: 2, q: 2 });
+  // without a second qubit: the neighbour, as a click does
+  applyDrop(c, { kind: 'new', tool: { kind: 'cnot' } }, { col: 3, q: 3 });
+  assert.deepEqual(shape(c), ['x3>1', 'z0>3', 'rzz>0,2', 'x3>2']);
+});
+
+test('dragging a target moves it alone, and onto a control trades the two', () => {
+  const c = load('qubit[3] q; h q[2]; cx q[0], q[1];');
+  const id = allOps(c).find((o) => o.gate === 'x').id;
+  assert.equal(applyDrop(c, { kind: 'op', id, part: 't0', grabQ: 1 }, { col: 1, q: 2 }), null);
+  assert.deepEqual(shape(c), ['h>2', 'x0>2']);
+  applyDrop(c, { kind: 'op', id, part: 't0', grabQ: 2 }, { col: 1, q: 0 });
+  assert.deepEqual(shape(c), ['h>2', 'x2>0']);
+  // the column follows the pointer too
+  applyDrop(c, { kind: 'op', id, part: 'c0', grabQ: 2 }, { col: 0, q: 1 });
+  assert.deepEqual(shape(c), ['h>2 x1>0']);
+});
