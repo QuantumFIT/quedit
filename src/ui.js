@@ -451,7 +451,7 @@ async function copyPng() {
 function openInQvis() {
   const { fragment, dropped } = qvisFragment(state.circuit);
   window.open(`${QVIS_URL}#${fragment}`, '_blank', 'noopener');
-  if (dropped) toast(`q-vis shows unitary evolution only: left out ${dropped} measurement${dropped > 1 ? 's, resets or conditioned gates' : ', reset or conditioned gate'}.`);
+  if (dropped) toast(`quvis shows unitary evolution only: left out ${dropped} measurement${dropped > 1 ? 's, resets or conditioned gates' : ', reset or conditioned gate'}.`);
 }
 
 async function copyText(text, what) {

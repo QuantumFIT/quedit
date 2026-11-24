@@ -62,7 +62,7 @@ test('the built page is self-contained', () => {
   assert.match(html, /__m\['ui\.js'\]\.boot\(\)/);
 });
 
-test('a circuit goes to q-vis as unitary OpenQASM 2 from |0…0⟩', () => {
+test('a circuit goes to quvis as unitary OpenQASM 2 from |0…0⟩', () => {
   const { circuit } = parseQasm(`OPENQASM 3.0;
 include "stdgates.inc";
 qubit[2] q;
@@ -81,7 +81,7 @@ reset q[0];
   assert.match(qasm, /ryy\(pi\/2\) q\[0\], ?q\[1\];/);
   assert.doesNotMatch(qasm, /measure|reset|if|creg/);
   assert.equal(decodeText(p.get('s')), '|00> : 1');
-  // and what q-vis sends back — its OpenQASM 2, as `c` alone — loads here
+  // and what quvis sends back — its OpenQASM 2, as `c` alone — loads here
   const back = fragmentToCircuit(`c=${p.get('c')}`).circuit;
   assert.equal(allOps(back).length, 2);
 });

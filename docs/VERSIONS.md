@@ -1,4 +1,4 @@
-<!-- The scheme is the same as in q-vis (github.com/QuantumFIT/q-vis). -->
+<!-- The scheme is the same as in quvis (github.com/QuantumFIT/quvis). -->
 # Versions, and why old links keep working
 
 A permalink carries the whole circuit (as OpenQASM 3), the column of every gate and the

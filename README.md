@@ -51,8 +51,8 @@ works offline from `file://`.
 - **copy PNG** puts the drawing on the clipboard as an image (3× resolution, white
   background); where the browser does not allow images on the clipboard, e.g. from
   `file://`, it saves `circuit.png` instead.
-- **open in q-vis** shows the circuit in [q-vis](https://quantum.fit.vut.cz/q-vis/), which
-  animates its decision diagram gate by gate. q-vis simulates unitary circuits only, so
+- **open in quvis** shows the circuit in [quvis](https://quantum.fit.vut.cz/quvis/), which
+  animates its decision diagram gate by gate. quvis simulates unitary circuits only, so
   measurements, resets and conditioned gates are left out, and it takes only angles that
   are π times a dyadic fraction (π/4 yes, π/3 no). Its *quedit ↗* button brings a circuit
   back.
@@ -110,7 +110,7 @@ OpenQASM parser and the exporters run headless in Node, which is what the tests 
 
 ## Versions, previews and links
 
-Done the same way as in [q-vis](https://github.com/QuantumFIT/q-vis):
+Done the same way as in [quvis](https://github.com/QuantumFIT/quvis):
 
 - the site root is `master`, and `master` only moves on a release tagged `v1`, `v2`, …;
 - every release is kept, frozen, at `/v/<tag>/` (listed at `/v/`), and **copy link** in a

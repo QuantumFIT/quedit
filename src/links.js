@@ -84,15 +84,15 @@ export function fragmentToCircuit(fragment) {
   return { circuit, options };
 }
 
-// ---------------------------------------------------------------- q-vis
+// ---------------------------------------------------------------- quvis
 //
-// q-vis (QuantumFIT/q-vis) animates how a decision diagram evolves under a
+// quvis (QuantumFIT/quvis) animates how a decision diagram evolves under a
 // unitary circuit. Its links are #c=<base64url(OpenQASM 2)>&s=<base64url(state)>,
 // and it reads only unitary programs, so measurements, resets and conditioned
 // gates are left out. Its own links come back here as `c` alone: the importer
 // reads OpenQASM 2 as well as 3.
 
-export const QVIS_URL = 'https://quantum.fit.vut.cz/q-vis/';
+export const QVIS_URL = 'https://quantum.fit.vut.cz/quvis/';
 
 // Returns { fragment, dropped: number of operations left out, warnings }.
 export function qvisFragment(c) {

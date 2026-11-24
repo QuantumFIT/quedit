@@ -1,7 +1,7 @@
 # quedit — project conventions
 
 WYSIWYG quantum circuit editor (static web page) that exports quantikz and OpenQASM 2/3
-and imports OpenQASM. Sibling of q-vis (`~/q-vis`, github.com/QuantumFIT/q-vis), whose
+and imports OpenQASM. Sibling of quvis (`~/q-vis`, github.com/QuantumFIT/quvis), whose
 conventions it follows.
 
 ## Hard constraints
@@ -26,7 +26,7 @@ and classical-bit order.
 
 ## Previewing and releasing
 
-Same as q-vis — see `docs/VERSIONS.md`.
+Same as quvis — see `docs/VERSIONS.md`.
 
 - Work in progress goes to `preview`: `git push -f origin HEAD:preview`, published at
   <https://quantum.fit.vut.cz/quedit/preview/>. Give that link last, once the deploy has
