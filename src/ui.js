@@ -503,6 +503,70 @@ function loadFragment(fragment) {
   return circuit;
 }
 
+// ---------------------------------------------------------------- panel sizes
+
+const PANELS = 'quedit:panels';
+// each handle: the CSS variable it sets, and the size the pointer gives it
+const SPLITS = {
+  palette: { prop: '--palette-w', size: (e, ws) => e.clientX - ws.left, min: 140 },
+  props: { prop: '--props-w', size: (e, ws) => ws.right - e.clientX, min: 180 },
+  output: { prop: '--output-h', size: (e) => $('code').closest('.output').getBoundingClientRect().bottom - e.clientY - 4, min: 120 },
+};
+
+function setPanel(name, px) {
+  const root = document.documentElement.style;
+  if (px == null) root.removeProperty(SPLITS[name].prop);
+  else root.setProperty(SPLITS[name].prop, `${Math.round(px)}px`);
+}
+
+function savePanels() {
+  const sizes = {};
+  for (const [name, s] of Object.entries(SPLITS)) {
+    const v = document.documentElement.style.getPropertyValue(s.prop);
+    if (v) sizes[name] = parseFloat(v);
+  }
+  try { localStorage.setItem(PANELS, JSON.stringify(sizes)); } catch { /* private mode */ }
+}
+
+function setupPanels() {
+  try {
+    const sizes = JSON.parse(localStorage.getItem(PANELS) || '{}');
+    for (const name of Object.keys(SPLITS)) if (Number.isFinite(sizes[name])) setPanel(name, sizes[name]);
+  } catch { /* ignore a broken save */ }
+  const ws = document.querySelector('.workspace');
+  for (const handle of document.querySelectorAll('[data-split]')) {
+    const name = handle.dataset.split;
+    const s = SPLITS[name];
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('active');
+      document.body.classList.add('resizing', name === 'output' ? 'rows' : 'cols');
+      const move = (ev) => {
+        const box = ws.getBoundingClientRect();
+        // leave the circuit at least 240px across and 200px high
+        const max = name === 'output'
+          ? $('code').closest('.output').getBoundingClientRect().bottom - box.top - 8 - 200
+          : box.width - 240 - (name === 'palette' ? $('props').offsetWidth : $('palette').offsetWidth) - 16;
+        setPanel(name, Math.max(s.min, Math.min(max, s.size(ev, box))));
+      };
+      const up = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.removeEventListener('pointercancel', up);
+        handle.classList.remove('active');
+        document.body.classList.remove('resizing', 'rows', 'cols');
+        savePanels();
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+      handle.addEventListener('pointercancel', up);
+    });
+    handle.addEventListener('dblclick', () => { setPanel(name, null); savePanels(); });
+  }
+}
+
 // ---------------------------------------------------------------- boot
 
 function applyTheme(t) {
@@ -523,6 +587,7 @@ export function boot() {
     focusProps: () => $('propsForm').querySelector('input')?.focus(),
   });
   buildPalette();
+  setupPanels();
   // handy from the browser console, and what the browser tests drive
   window.quedit = { editor, state, permalink };
 

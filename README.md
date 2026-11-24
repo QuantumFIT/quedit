@@ -31,6 +31,8 @@ works offline from `file://`.
 - **Insert an empty column** with the ＋ that appears above the wires between columns when
   the pointer is over the circuit; it stays empty until something is put there (or
   `compact` removes it).
+- **Resize the panels** by dragging the gaps between them (double-click a gap to reset);
+  the sizes are remembered in the browser.
 - **Hide** qubits under ⋮: hover a qubit's label and click the ⋮ button. Neighbouring
   hidden qubits share one row of dots; click the dots to show them again. Only the drawing
   changes (editor, PNG and quantikz, where the row is `\lstick{\vdots} \setwiretype{n}`),

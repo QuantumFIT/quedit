@@ -103,7 +103,7 @@ button.primary { background: var(--ink); color: var(--plate); border-color: var(
 
 .app {
   display: grid;
-  grid-template-rows: auto auto minmax(300px, 1fr) minmax(190px, 30vh);
+  grid-template-rows: auto auto minmax(200px, 1fr) var(--output-h, minmax(190px, 30vh));
   height: 100vh;
   gap: 8px;
   padding: 0 12px 12px;
@@ -144,10 +144,24 @@ button.primary { background: var(--ink); color: var(--plate); border-color: var(
 
 .workspace {
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr) 248px;
+  grid-template-columns: var(--palette-w, 216px) minmax(0, 1fr) var(--props-w, 248px);
   gap: 8px;
   min-height: 0;
+  position: relative;
 }
+
+/* handles in the gaps between panels: drag to resize, double-click to reset */
+.split { position: absolute; z-index: 2; touch-action: none; }
+.split::after { content: ''; position: absolute; inset: 0; border-radius: 2px; transition: background 0.12s; }
+.split:hover::after, .split.active::after { background: var(--accent); opacity: 0.5; }
+.split[data-split="palette"] { top: 0; bottom: 0; left: var(--palette-w, 216px); width: 8px; cursor: col-resize; }
+.split[data-split="props"] { top: 0; bottom: 0; right: var(--props-w, 248px); width: 8px; cursor: col-resize; }
+.split[data-split="output"] { left: 0; right: 0; bottom: -8px; height: 8px; cursor: row-resize; }
+.split[data-split]::after { margin: 0 3px; }
+.split[data-split="output"]::after { margin: 3px 0; }
+body.resizing { user-select: none; -webkit-user-select: none; }
+body.resizing.cols { cursor: col-resize; }
+body.resizing.rows { cursor: row-resize; }
 
 .palette, .props {
   background: var(--panel);
@@ -366,5 +380,6 @@ button.primary { background: var(--ink); color: var(--plate); border-color: var(
   .plate { order: 2; min-height: 280px; }
   .props { order: 3; }
   .output { min-height: 320px; }
+  .split { display: none; }
   .tagline { display: none; }
 }
